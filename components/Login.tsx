@@ -2,13 +2,15 @@
 import React, { useContext, useState, useMemo } from 'react';
 import { AppContext } from '../App';
 import { Role, User } from '../types';
+import { pushData } from '../firebase';
 
 const Login: React.FC = () => {
-  const { setCurrentUser, setAllUsers, allUsers, setRecoveryRequests } = useContext(AppContext);
+  const { setCurrentUser, allUsers, setRecoveryRequests } = useContext(AppContext);
   const [view, setView] = useState<'login' | 'register' | 'forgot'>('login');
   
   const [identifier, setIdentifier] = useState('');
   const [pin, setPin] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -43,7 +45,7 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (pin.length !== 4 || isNaN(Number(pin))) {
         setMessage({ text: 'PIN protocol requires 4 digits.', type: 'error' });
@@ -54,23 +56,36 @@ const Login: React.FC = () => {
       setMessage({ text: 'Name already indexed in fleet.', type: 'error' });
       return;
     }
+    
+    setIsLoading(true);
     const needsApproval = [Role.Vendor, Role.Rider].includes(role);
-    const newUser: User = {
-      id: `user-${Date.now()}`,
+    const newUser: Partial<User> = {
       name,
       phone,
       email,
       pin,
       role,
       active: !needsApproval,
+      commissionBalance: 0,
+      totalWithdrawn: 0,
+      commissionRate: 0.1
     };
-    setAllUsers([...allUsers, newUser]);
-    if (needsApproval) {
-      setMessage({ text: 'Application sent for encryption review.', type: 'success' });
-    } else {
-      setMessage({ text: 'Access Granted. Authenticate to enter.', type: 'success' });
+
+    try {
+      // PUSH TO FIREBASE
+      await pushData('users', newUser);
+      
+      if (needsApproval) {
+        setMessage({ text: 'Application sent for encryption review.', type: 'success' });
+      } else {
+        setMessage({ text: 'Access Granted. Authenticate to enter.', type: 'success' });
+      }
+      setView('login');
+    } catch (error) {
+      setMessage({ text: 'Sync Error: Check internet connection.', type: 'error' });
+    } finally {
+      setIsLoading(false);
     }
-    setView('login');
   };
 
   const handleRecoveryRequest = (e: React.FormEvent) => {
@@ -126,16 +141,16 @@ const Login: React.FC = () => {
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Full Identity Name</label>
-            <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="form-input-dark" />
+            <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="form-input-dark" disabled={isLoading} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Comms Link</label>
-              <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} className="form-input-dark" />
+              <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} className="form-input-dark" disabled={isLoading} />
             </div>
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fleet Role</label>
-              <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="form-input-dark appearance-none">
+              <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="form-input-dark appearance-none" disabled={isLoading}>
                 <option value={Role.Customer}>Customer</option>
                 <option value={Role.Vendor}>Vendor</option>
                 <option value={Role.Rider}>Rider</option>
@@ -144,10 +159,18 @@ const Login: React.FC = () => {
           </div>
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Security PIN (4 Digits)</label>
-            <input type="password" maxLength={4} required value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} className="form-input-dark" />
+            <input type="password" maxLength={4} required value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} className="form-input-dark" disabled={isLoading} />
           </div>
-          <button type="submit" className="btn-primary-dark mt-4">Confirm Enrollment</button>
-          <button type="button" onClick={() => setView('login')} className="w-full text-[10px] font-bold text-slate-500 uppercase tracking-widest py-2">Return to Login</button>
+          <button type="submit" className="btn-primary-dark mt-4 flex items-center justify-center gap-2" disabled={isLoading}>
+            {isLoading && (
+              <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            {isLoading ? 'Syncing...' : 'Confirm Enrollment'}
+          </button>
+          <button type="button" onClick={() => setView('login')} className="w-full text-[10px] font-bold text-slate-500 uppercase tracking-widest py-2" disabled={isLoading}>Return to Login</button>
         </form>
       )}
 
@@ -180,6 +203,7 @@ const Login: React.FC = () => {
           font-size: 0.875rem;
         }
         .form-input-dark:focus { border-color: #6366f1; background: #020617; }
+        .form-input-dark:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-primary-dark {
           width: 100%;
           background: #6366f1;
@@ -193,6 +217,7 @@ const Login: React.FC = () => {
           box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);
         }
         .btn-primary-dark:hover { background: #4f46e5; transform: translateY(-1px); box-shadow: 0 20px 25px -5px rgba(99, 102, 241, 0.4); }
+        .btn-primary-dark:disabled { background: #334155; box-shadow: none; cursor: not-allowed; transform: none; }
       `}</style>
     </div>
   );

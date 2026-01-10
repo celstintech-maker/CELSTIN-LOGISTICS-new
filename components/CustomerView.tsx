@@ -3,18 +3,20 @@ import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../App';
 import { Delivery, DeliveryStatus, PaymentStatus } from '../types';
 import Modal from './Modal';
+import { pushData } from '../firebase';
 
 const CustomerView: React.FC = () => {
-    const { setDeliveries, systemSettings } = useContext(AppContext);
+    const { systemSettings } = useContext(AppContext);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [lastDeliveryId, setLastDeliveryId] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        setIsSubmitting(true);
         const formData = new FormData(e.currentTarget);
-        const deliveryId = `del-${Date.now()}`;
-        const newDelivery: Delivery = {
-            id: deliveryId,
+        
+        const newDelivery: Partial<Delivery> = {
             customer: {
                 id: `cust-${Date.now()}`,
                 name: formData.get('customerName') as string,
@@ -26,19 +28,18 @@ const CustomerView: React.FC = () => {
             status: DeliveryStatus.Pending,
             paymentStatus: PaymentStatus.Unpaid,
             price: 1500 + Math.floor(Math.random() * 10) * 150,
-            createdAt: new Date(),
         };
-        setDeliveries(prev => [newDelivery, ...prev]);
-        setLastDeliveryId(deliveryId);
-        setShowPaymentModal(true);
-        e.currentTarget.reset();
 
-        // Simulate real-time bank settlement notification after 15 seconds
-        setTimeout(() => {
-            setDeliveries(prev => prev.map(d => 
-                d.id === deliveryId ? { ...d, paymentStatus: PaymentStatus.Paid } : d
-            ));
-        }, 15000);
+        try {
+            const firebaseId = await pushData('deliveries', newDelivery);
+            setLastDeliveryId(firebaseId || 'pending');
+            setShowPaymentModal(true);
+            e.currentTarget.reset();
+        } catch (error) {
+            alert("Connection error. Terminal sync failed.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -81,8 +82,15 @@ const CustomerView: React.FC = () => {
                 </div>
 
                 <div className="text-center pt-4">
-                     <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-4 px-4 rounded-2xl shadow-xl shadow-indigo-900/40 hover:bg-indigo-500 hover:scale-[1.01] transition-all duration-300 uppercase tracking-widest text-sm">
-                        Initialize Dispatch Protocol
+                     <button 
+                        type="submit" 
+                        disabled={isSubmitting}
+                        className={`w-full bg-indigo-600 text-white font-bold py-4 px-4 rounded-2xl shadow-xl shadow-indigo-900/40 hover:bg-indigo-500 hover:scale-[1.01] transition-all duration-300 uppercase tracking-widest text-sm flex items-center justify-center gap-3 ${isSubmitting ? 'opacity-70' : ''}`}
+                    >
+                        {isSubmitting && (
+                             <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        )}
+                        {isSubmitting ? 'Transmitting...' : 'Initialize Dispatch Protocol'}
                     </button>
                 </div>
             </form>
