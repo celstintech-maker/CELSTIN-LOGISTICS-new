@@ -71,16 +71,30 @@ export const AppContext = React.createContext<{
 });
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [deliveries, setDeliveries] = useState<Delivery[]>(MOCK_DELIVERIES);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('clestin_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const [deliveries, setDeliveries] = useState<Delivery[]>(() => {
+    const saved = localStorage.getItem('clestin_deliveries');
+    return saved ? JSON.parse(saved) : MOCK_DELIVERIES;
+  });
+
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [recoveryRequests, setRecoveryRequests] = useState<RecoveryRequest[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>(MOCK_USERS.map(u => ({
+  
+  const [allUsers, setAllUsers] = useState<User[]>(() => {
+    const saved = localStorage.getItem('clestin_all_users');
+    if (saved) return JSON.parse(saved);
+    return MOCK_USERS.map(u => ({
       ...u,
       commissionBalance: u.role === Role.Vendor ? Math.floor(Math.random() * 50000) : 0,
       totalWithdrawn: u.role === Role.Vendor ? Math.floor(Math.random() * 200000) : 0,
       commissionRate: 0.1
-  })));
+    }));
+  });
+
   const [vendorPerformance, setVendorPerformance] = useState<VendorPerformance[]>(MOCK_VENDORS_PERFORMANCE);
   
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
@@ -117,6 +131,22 @@ const App: React.FC = () => {
     }
   }, [systemSettings]);
 
+  useEffect(() => {
+    localStorage.setItem('clestin_all_users', JSON.stringify(allUsers));
+  }, [allUsers]);
+
+  useEffect(() => {
+    localStorage.setItem('clestin_deliveries', JSON.stringify(deliveries));
+  }, [deliveries]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('clestin_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('clestin_user');
+    }
+  }, [currentUser]);
+
   const logout = () => setCurrentUser(null);
 
   const contextValue = useMemo(() => ({
@@ -138,6 +168,7 @@ const App: React.FC = () => {
   }), [currentUser, deliveries, allUsers, vendorPerformance, systemSettings, chatHistory, recoveryRequests]);
 
   return (
+    /* Fix: Change 'contextValue' to 'value' for Context.Provider */
     <AppContext.Provider value={contextValue}>
       <div className="flex flex-col min-h-screen transition-colors duration-700 ease-in-out bg-slate-50 dark:bg-[#020617]">
         <Header />

@@ -1,5 +1,12 @@
 {
   "name": "CLESTIN LOGISTICS",
+  "short_name": "CLESTIN",
   "description": "A comprehensive delivery management application with real-time tracking, multi-role access, and robust order management for CLESTIN LOGISTICS in Asaba, Nigeria.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ],
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#4f46e5"
 }

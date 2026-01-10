@@ -4,7 +4,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#4f46e5" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>CLESTIN LOGISTICS | Asaba's Premier Delivery Service</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,7 +18,8 @@
     <style>
       body { 
         font-family: 'Inter', sans-serif; 
-        background: radial-gradient(circle at 50% 0%, #0f172a 0%, #020617 100%);
+        background: #020617;
+        overscroll-behavior-y: contain;
       }
       h1, h2, h3, .font-outfit { font-family: 'Outfit', sans-serif; }
       .glass { 
@@ -31,6 +35,10 @@
       .custom-scrollbar::-webkit-scrollbar { width: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+      
+      /* Hide scrollbars for a cleaner app look */
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
   <script type="importmap">
 {
