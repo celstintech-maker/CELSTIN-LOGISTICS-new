@@ -1,7 +1,8 @@
 
 {
+  "version": 2,
+  "framework": "vite",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "cleanUrls": true
+  ]
 }
