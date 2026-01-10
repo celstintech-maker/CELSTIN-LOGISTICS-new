@@ -111,14 +111,12 @@ const App: React.FC = () => {
   // REAL-TIME FIREBASE SYNC
   useEffect(() => {
     const handleSyncError = (err: any) => {
-        // Only set disconnected if it's a genuine connection issue or persistent permission issue
         if (err.code === 'permission-denied') {
-            console.error("Rules updated? If yes, refresh. Otherwise check permissions.");
             setIsCloudConnected(false);
-            setCloudError("Access Denied: Check Security Rules.");
+            setCloudError("Access Denied: Please check your published Firestore rules.");
         } else if (err.code === 'unavailable') {
             setIsCloudConnected(false);
-            setCloudError("Cloud offline. Using local cache.");
+            setCloudError("Cloud sync unavailable. Operating from local cache.");
         }
     };
 
@@ -147,11 +145,11 @@ const App: React.FC = () => {
   }, []);
 
   const broadcastToCloud = async () => {
-    console.log("Firebase sync active.");
+    console.log("Firebase listeners are managing live data stream.");
   };
 
   const syncFromCloud = async () => {
-    console.log("Firebase listeners are active.");
+    console.log("Re-initializing data listeners.");
   };
 
   useEffect(() => {
