@@ -1,0 +1,96 @@
+
+export enum Role {
+  SuperAdmin = 'Super Admin',
+  Admin = 'Admin',
+  Vendor = 'Vendor',
+  Rider = 'Rider',
+  Customer = 'Customer',
+}
+
+export enum DeliveryStatus {
+  Pending = 'Pending',
+  Assigned = 'Assigned',
+  PickedUp = 'Picked Up',
+  InTransit = 'In Transit',
+  Delivered = 'Delivered',
+  Failed = 'Failed',
+}
+
+export enum PaymentStatus {
+  Unpaid = 'Unpaid',
+  Paid = 'Paid',
+}
+
+export interface BankDetails {
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+}
+
+export interface Location {
+    lat: number;
+    lng: number;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  phone: string;
+  role: Role;
+  email?: string;
+  pin?: string;
+  bankDetails?: BankDetails;
+  commissionBalance?: number; // Current unpaid earnings
+  totalWithdrawn?: number; // Total history of payouts
+  commissionRate?: number; // Percentage (e.g., 0.1 for 10%)
+  vehicle?: string;
+  active?: boolean;
+  location?: Location;
+}
+
+export interface PayoutNotification {
+    id: string;
+    amount: number;
+    timestamp: Date;
+    status: 'pending' | 'completed';
+}
+
+export interface CustomerInfo {
+    id: string;
+    name: string;
+    phone: string;
+}
+
+export interface Delivery {
+  id: string;
+  customer: CustomerInfo;
+  rider?: User;
+  vendorId?: string; // Track which vendor this order belongs to
+  pickupAddress: string;
+  dropoffAddress: string;
+  packageNotes: string;
+  status: DeliveryStatus;
+  paymentStatus: PaymentStatus;
+  price: number;
+  createdAt: Date;
+}
+
+export interface VendorPerformance {
+  vendorId: string;
+  totalOrders: number;
+  completedOrders: number;
+  onTimeRate: number;
+}
+
+export interface SystemSettings {
+    businessName: string;
+    businessAddress: string;
+    logoUrl: string;
+    primaryColor: string;
+    paymentAccountName: string;
+    paymentAccountNumber: string;
+    paymentBank: string;
+    footerText: string;
+    theme: 'light' | 'dark';
+    standardCommissionRate: number; // Global default commission
+}
