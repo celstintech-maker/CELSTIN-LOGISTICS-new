@@ -11,8 +11,18 @@ import MapView from './MapView';
 import VendorFinancials from './VendorFinancials';
 
 const Dashboard: React.FC = () => {
-  const { currentUser, setCurrentUser, deliveries, allUsers, setAllUsers } = useContext(AppContext);
+  const { currentUser, setCurrentUser, deliveries, allUsers, setAllUsers, broadcastToCloud, syncFromCloud } = useContext(AppContext);
   const [activeTab, setActiveTab] = useState('deliveries');
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleCloudSync = async () => {
+    setIsSyncing(true);
+    // Simulate cloud latency
+    await new Promise(r => setTimeout(r, 1500));
+    await syncFromCloud();
+    setIsSyncing(false);
+    alert("Fleet Registry Synchronized with Cloud. All device registrations updated.");
+  };
 
   const settleVendor = (vendorId: string) => {
     const vendor = allUsers.find(u => u.id === vendorId);
@@ -25,7 +35,6 @@ const Dashboard: React.FC = () => {
     }
 
     if (window.confirm(`Initiate vault transfer of ₦${balance.toLocaleString()} to ${vendor.name}?`)) {
-      // Create the updated user list to ensure a fresh reference for state change detection
       const updatedUsers = allUsers.map(u => {
         if (u.id === vendorId) {
           return {
@@ -37,10 +46,8 @@ const Dashboard: React.FC = () => {
         return u;
       });
 
-      // Update Global Registry
       setAllUsers(updatedUsers);
 
-      // If the currently logged-in user is the one being settled, sync their session
       if (currentUser?.id === vendorId) {
         setCurrentUser({
           ...currentUser,
@@ -48,8 +55,6 @@ const Dashboard: React.FC = () => {
           commissionBalance: 0
         });
       }
-
-      console.log(`Settlement processed: ₦${balance.toLocaleString()} for ${vendorId}`);
     }
   };
 
@@ -82,27 +87,23 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
 
-            {currentUser?.role === Role.Vendor && (
-                <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-8 rounded-3xl text-white shadow-2xl shadow-indigo-500/20">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-lg font-bold font-outfit uppercase tracking-wider">Treasury Overview</h3>
-                        <span className="bg-white/10 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">Verified Merchant</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                        <div>
-                            <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Available Settlement</p>
-                            <p className="text-4xl font-black">₦{(currentUser.commissionBalance || 0).toLocaleString()}</p>
-                        </div>
-                        <div className="border-l border-white/10 pl-8">
-                            <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Lifetime Payouts</p>
-                            <p className="text-4xl font-black">₦{(currentUser.totalWithdrawn || 0).toLocaleString()}</p>
-                        </div>
-                    </div>
-                    <div className="mt-8 flex items-center gap-3 text-xs font-bold text-indigo-100 bg-black/10 p-4 rounded-xl border border-white/5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Next weekly payout cycle: <span className="underline">Monday, 09:00 AM</span>
-                    </div>
-                </div>
+            {currentUser?.role === Role.SuperAdmin && (
+               <div className="bg-slate-800/40 border border-slate-700 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
+                  <div>
+                    <h3 className="text-white font-bold font-outfit uppercase text-sm tracking-wider">Cloud Sync Terminal</h3>
+                    <p className="text-slate-400 text-xs mt-1">Pull data from users who registered on other devices into this terminal.</p>
+                  </div>
+                  <button 
+                    onClick={handleCloudSync}
+                    disabled={isSyncing}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all flex items-center gap-2"
+                  >
+                    <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    {isSyncing ? 'Accessing Neural Link...' : 'Sync All Devices'}
+                  </button>
+               </div>
             )}
 
             {[Role.SuperAdmin, Role.Admin, Role.Rider, Role.Vendor].includes(currentUser!.role) && <CreateDelivery />}

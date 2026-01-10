@@ -41,6 +41,8 @@ export const AppContext = React.createContext<{
   setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   recoveryRequests: RecoveryRequest[];
   setRecoveryRequests: React.Dispatch<React.SetStateAction<RecoveryRequest[]>>;
+  broadcastToCloud: () => Promise<void>;
+  syncFromCloud: () => Promise<void>;
 }>({
   currentUser: null,
   setCurrentUser: () => {},
@@ -68,6 +70,8 @@ export const AppContext = React.createContext<{
   setChatHistory: () => {},
   recoveryRequests: [],
   setRecoveryRequests: () => {},
+  broadcastToCloud: async () => {},
+  syncFromCloud: async () => {},
 });
 
 const App: React.FC = () => {
@@ -120,6 +124,29 @@ const App: React.FC = () => {
     };
   });
 
+  // Simulated Cross-Device Syncing logic
+  // In a real app, this would be a POST to an API or Firebase update
+  const broadcastToCloud = async () => {
+    console.log("Broadcasting registry to fleet cloud...");
+    localStorage.setItem('clestin_cloud_buffer', JSON.stringify({
+      allUsers,
+      deliveries,
+      timestamp: Date.now()
+    }));
+    // In this demo, we use a shared storage key that other tabs can detect
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  const syncFromCloud = async () => {
+    console.log("Synchronizing from fleet cloud...");
+    const cloudData = localStorage.getItem('clestin_cloud_buffer');
+    if (cloudData) {
+      const parsed = JSON.parse(cloudData);
+      setAllUsers(parsed.allUsers);
+      setDeliveries(parsed.deliveries);
+    }
+  };
+
   useEffect(() => {
     localStorage.setItem('clestin_settings', JSON.stringify(systemSettings));
     if (systemSettings.theme === 'dark') {
@@ -165,10 +192,11 @@ const App: React.FC = () => {
     setChatHistory,
     recoveryRequests,
     setRecoveryRequests,
+    broadcastToCloud,
+    syncFromCloud
   }), [currentUser, deliveries, allUsers, vendorPerformance, systemSettings, chatHistory, recoveryRequests]);
 
   return (
-    /* Fix: Change 'contextValue' to 'value' for Context.Provider */
     <AppContext.Provider value={contextValue}>
       <div className="flex flex-col min-h-screen transition-colors duration-700 ease-in-out bg-slate-50 dark:bg-[#020617]">
         <Header />
