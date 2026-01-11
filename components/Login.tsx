@@ -25,7 +25,9 @@ const Login: React.FC = () => {
     setMessage({ text: '', type: 'info' });
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, emailInput, password);
+      const userCredential = await signInWithEmailAndPassword(auth, emailInput.trim(), password);
+      
+      // Fetch profile with a fresh read to avoid cache issues for newly approved users
       const profile = await getUserProfile(userCredential.user.uid);
       
       if (!profile) {
@@ -34,6 +36,7 @@ const Login: React.FC = () => {
         return;
       }
 
+      // Check if user is active. Super Admins are usually active by default.
       if (profile.active === false) {
         setMessage({ text: 'ENROLLMENT PENDING: Your account is awaiting Super Admin verification. Please try again after approval.', type: 'error' });
         await signOut(auth);
@@ -42,12 +45,12 @@ const Login: React.FC = () => {
 
       setCurrentUser(profile);
     } catch (error: any) {
+      console.error("Login Error:", error);
       let errorMsg = 'Authentication failed. Please check credentials.';
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-email') {
         errorMsg = 'Invalid email or access token.';
       }
       setMessage({ text: errorMsg, type: 'error' });
-    } finally {
       setIsLoading(false);
     }
   };
@@ -60,7 +63,7 @@ const Login: React.FC = () => {
     }
     setIsLoading(true);
     try {
-      await sendPasswordResetEmail(auth, emailInput);
+      await sendPasswordResetEmail(auth, emailInput.trim());
       setMessage({ text: 'Reset link sent to your inbox.', type: 'success' });
       setView('login');
     } catch (error: any) {
@@ -75,18 +78,19 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setMessage({ text: '', type: 'info' });
 
-    const isSuperAdminEmail = emailInput.toLowerCase() === 'support@celstin.com';
+    const trimmedEmail = emailInput.trim().toLowerCase();
+    const isSuperAdminEmail = trimmedEmail === 'support@celstin.com';
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, emailInput, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       
       const newUserProfile: Partial<User> = {
         id: userCredential.user.uid,
         name: name.trim(),
         phone: phone.trim(),
-        email: emailInput.trim(),
+        email: trimmedEmail,
         role: isSuperAdminEmail ? Role.SuperAdmin : role,
-        active: isSuperAdminEmail,
+        active: isSuperAdminEmail, // Automatically active if it's the super admin email
         commissionBalance: 0,
         totalWithdrawn: 0,
         commissionRate: 0.1
@@ -95,14 +99,17 @@ const Login: React.FC = () => {
       await setProfileData(userCredential.user.uid, newUserProfile);
       
       if (!isSuperAdminEmail) {
-        setRegistrationSuccess(true);
+        // Explicitly sign out after registration so they can't bypass approval
         await signOut(auth);
+        setRegistrationSuccess(true);
       } else {
         setCurrentUser(newUserProfile as User);
       }
     } catch (error: any) {
+      console.error("Registration Error:", error);
       let errorMsg = 'Registration failed.';
       if (error.code === 'auth/email-already-in-use') errorMsg = 'Email already registered.';
+      if (error.code === 'auth/weak-password') errorMsg = 'Password is too weak.';
       setMessage({ text: errorMsg, type: 'error' });
     } finally {
       setIsLoading(false);
@@ -127,7 +134,7 @@ const Login: React.FC = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h2 className="text-2xl font-bold text-white uppercase tracking-tight mb-4">Registration Logged</h2>
+        <h2 className="text-2xl font-bold text-white uppercase tracking-tight mb-4 font-outfit">Registration Logged</h2>
         <p className="text-slate-400 text-sm leading-relaxed mb-8">
           Your profile has been created! A <span className="text-white font-bold">Super Admin</span> must approve your account before you can log in.
         </p>
@@ -141,7 +148,7 @@ const Login: React.FC = () => {
   return (
     <div className="bg-slate-900 p-10 rounded-3xl shadow-2xl border border-slate-800 w-full max-w-md mx-auto relative overflow-hidden">
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-white uppercase tracking-tight">
+        <h2 className="text-3xl font-bold text-white uppercase tracking-tight font-outfit">
           {view === 'login' ? 'Secure Login' : view === 'register' ? 'Enrollment' : 'Recovery'}
         </h2>
       </div>
@@ -191,6 +198,7 @@ const Login: React.FC = () => {
         .form-input-dark { width: 100%; padding: 0.875rem 1.25rem; border-radius: 1rem; background: #0f172a; border: 1px solid #1e293b; color: white; outline: none; font-size: 0.875rem; transition: all 0.2s; }
         .form-input-dark:focus { border-color: #6366f1; }
         .btn-primary-dark { width: 100%; background: #6366f1; color: white; font-weight: 800; text-transform: uppercase; padding: 1rem; border-radius: 1rem; transition: all 0.3s; }
+        .btn-primary-dark:disabled { opacity: 0.5; cursor: not-allowed; }
       `}</style>
     </div>
   );
