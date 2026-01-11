@@ -1,5 +1,4 @@
-
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { initializeApp } from "firebase/app";
 import { 
   getFirestore, 
   collection, 
@@ -13,14 +12,14 @@ import {
   getDoc,
   serverTimestamp,
   enableIndexedDbPersistence
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+} from "firebase/firestore";
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged 
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDR5ItO2VcxLxcxqp8bmKVQ4QOBhakFZ6g",
