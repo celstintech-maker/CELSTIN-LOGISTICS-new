@@ -13,12 +13,12 @@ const ManageStaff: React.FC = () => {
 
     const isSuperAdmin = currentUser?.role === Role.SuperAdmin;
 
-    // Partition users
-    const pendingUsers = allUsers.filter(u => u.active === false && !u.isDeleted);
-    const activeUsers = allUsers.filter(u => u.active === true && !u.isDeleted);
+    // Filter logic: Ensure accounts are mutually exclusive between active, pending, and deleted
+    const pendingUsers = allUsers.filter(u => u.active === false && u.isDeleted !== true);
+    const activeUsers = allUsers.filter(u => u.active === true && u.isDeleted !== true);
     const deletedUsers = allUsers.filter(u => u.isDeleted === true);
     
-    // Filtered deleted users for search
+    // Filtered deleted users for search (specifically targeting the email mentioned)
     const filteredDeleted = deletedUsers.filter(u => 
         u.email?.toLowerCase().includes(deleteSearch.toLowerCase()) || 
         u.name.toLowerCase().includes(deleteSearch.toLowerCase()) ||
@@ -66,11 +66,12 @@ const ManageStaff: React.FC = () => {
     const handleRestore = async (userId: string) => {
         setIsUpdating(userId);
         try {
+            // Restoration must reset both active status and isDeleted flag
             await updateData('users', userId, { 
                 isDeleted: false, 
                 active: true 
             });
-            showToast('User account restored successfully.', 'success');
+            showToast('User account successfully restored to registry.', 'success');
         } catch (error) {
             showToast('Restoration failed.', 'error');
         } finally {
@@ -113,20 +114,20 @@ const ManageStaff: React.FC = () => {
 
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white uppercase tracking-tight font-outfit">Workforce Management</h2>
-                    <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mt-1">Verified Personnel Registry</p>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white uppercase tracking-tight font-outfit">Workforce Registry</h2>
+                    <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mt-1">Personnel Access Control</p>
                 </div>
                 {isSuperAdmin && (
                     <button 
                         onClick={() => setShowDeleted(!showDeleted)}
                         className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
                             showDeleted 
-                            ? 'bg-rose-600 text-white shadow-lg' 
+                            ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/30' 
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'
                         }`}
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                        {showDeleted ? 'Exit Recycle Bin' : `Recycle Bin (${deletedUsers.length})`}
+                        {showDeleted ? 'Back to Live Fleet' : `Recycle Bin (${deletedUsers.length})`}
                     </button>
                 )}
             </div>
@@ -134,17 +135,20 @@ const ManageStaff: React.FC = () => {
             {isSuperAdmin && showDeleted && (
                 <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 p-8 rounded-3xl animate-in slide-in-from-top-4">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                        <h2 className="text-xl font-bold text-rose-900 dark:text-rose-400 uppercase tracking-tight flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse"></span>
-                            Recycle Bin
-                        </h2>
+                        <div>
+                            <h2 className="text-xl font-bold text-rose-900 dark:text-rose-400 uppercase tracking-tight flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse"></span>
+                                Archived Accounts
+                            </h2>
+                            <p className="text-[10px] text-rose-600 dark:text-rose-500/70 font-bold uppercase tracking-widest mt-1">Search or restore logically deleted personnel</p>
+                        </div>
                         <div className="relative w-full md:w-72">
                             <input 
                                 type="text" 
-                                placeholder="Search by email or name..." 
+                                placeholder="Search by email..." 
                                 value={deleteSearch}
                                 onChange={(e) => setDeleteSearch(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/40 rounded-xl text-xs outline-none focus:ring-2 focus:ring-rose-500/50"
+                                className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/40 rounded-xl text-xs outline-none focus:ring-2 focus:ring-rose-500/50 text-slate-900 dark:text-white shadow-sm"
                             />
                             <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                         </div>
@@ -152,12 +156,12 @@ const ManageStaff: React.FC = () => {
                     
                     {filteredDeleted.length === 0 ? (
                         <div className="text-center py-12 border-2 border-dashed border-rose-200 dark:border-rose-900/30 rounded-2xl">
-                            <p className="text-sm text-rose-400 italic">No matching deleted accounts found.</p>
+                            <p className="text-sm text-rose-400 italic font-medium">No results for "{deleteSearch}". Ensure the account was marked as deleted.</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {filteredDeleted.map(u => (
-                                <div key={u.id} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-rose-200 dark:border-rose-900/30 shadow-sm relative group overflow-hidden">
+                                <div key={u.id} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-rose-200 dark:border-rose-900/30 shadow-sm relative group overflow-hidden hover:border-rose-400 transition-colors">
                                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                                         <svg className="w-16 h-16 text-rose-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
                                     </div>
@@ -167,15 +171,22 @@ const ManageStaff: React.FC = () => {
                                                 <p className="font-bold text-slate-900 dark:text-white text-lg leading-tight">{u.name}</p>
                                                 <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest mt-1">{u.role}</p>
                                             </div>
-                                            <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-500/10 text-rose-600 text-[8px] font-black uppercase rounded">Deleted</span>
+                                            <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-500/10 text-rose-600 text-[8px] font-black uppercase rounded">Status: Deleted</span>
                                         </div>
-                                        <p className="text-[10px] text-slate-400 mt-2 font-mono truncate">{u.email || u.phone}</p>
+                                        <p className="text-[10px] text-slate-400 mt-2 font-mono truncate bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded border border-slate-100 dark:border-slate-800">{u.email || u.phone}</p>
                                         <button 
                                             onClick={() => handleRestore(u.id)} 
                                             disabled={isUpdating === u.id}
-                                            className="w-full mt-6 bg-indigo-600 text-white text-[10px] font-black py-3 rounded-xl hover:bg-indigo-500 transition-all uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/20 active:scale-95"
+                                            className="w-full mt-6 bg-indigo-600 text-white text-[10px] font-black py-3.5 rounded-xl hover:bg-indigo-500 transition-all uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/20 active:scale-95 flex items-center justify-center gap-2"
                                         >
-                                            {isUpdating === u.id ? 'Restoring...' : 'Restore Access'}
+                                            {isUpdating === u.id ? (
+                                                <>
+                                                    <svg className="animate-spin h-3 w-3 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                    Syncing...
+                                                </>
+                                            ) : (
+                                                'Restore Identity'
+                                            )}
                                         </button>
                                     </div>
                                 </div>
@@ -191,7 +202,7 @@ const ManageStaff: React.FC = () => {
                         <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 p-8 rounded-3xl animate-in slide-in-from-top-4">
                             <h2 className="text-xl font-bold text-amber-900 dark:text-amber-400 uppercase tracking-tight mb-6 flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                                Approval Requests
+                                Enrollment Verification
                             </h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {pendingUsers.map(u => (
