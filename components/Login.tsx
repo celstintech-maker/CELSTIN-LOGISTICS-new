@@ -5,7 +5,7 @@ import { Role, User } from '../types';
 import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, setProfileData, getUserProfile, signOut, sendPasswordResetEmail } from '../firebase';
 
 const Login: React.FC = () => {
-  const { setCurrentUser } = useContext(AppContext);
+  const { setCurrentUser, allUsers } = useContext(AppContext);
   const [view, setView] = useState<'login' | 'register' | 'forgot'>('login');
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   
@@ -46,7 +46,6 @@ const Login: React.FC = () => {
       // Check for pending approval
       if (profile.active === false) {
         setMessage({ text: 'ENROLLMENT PENDING: Your account is awaiting Super Admin verification. Please try again after approval.', type: 'error' });
-        // We sign out to prevent the app from attempting to load an unauthorized state
         await signOut(auth);
         setIsLoading(false);
         return;
@@ -88,6 +87,18 @@ const Login: React.FC = () => {
     setMessage({ text: '', type: 'info' });
 
     const trimmedEmail = emailInput.trim().toLowerCase();
+    
+    // Manual check against existing users for logical deletion
+    const existingUser = allUsers.find(u => u.email?.toLowerCase() === trimmedEmail);
+    if (existingUser && existingUser.isDeleted) {
+        setMessage({ 
+            text: 'EMAIL ARCHIVED: An account with this email exists but is deactivated. Please contact a Super Admin to RESTORE your account instead of creating a new one.', 
+            type: 'error' 
+        });
+        setIsLoading(false);
+        return;
+    }
+
     const isSuperAdminEmail = trimmedEmail === 'support@celstin.com';
 
     try {
@@ -117,7 +128,7 @@ const Login: React.FC = () => {
     } catch (error: any) {
       console.error("Registration Error:", error);
       let errorMsg = 'Registration failed.';
-      if (error.code === 'auth/email-already-in-use') errorMsg = 'Email already registered.';
+      if (error.code === 'auth/email-already-in-use') errorMsg = 'Email already registered. If you think your account was deleted, contact an Admin to restore it.';
       if (error.code === 'auth/weak-password') errorMsg = 'Password is too weak.';
       setMessage({ text: errorMsg, type: 'error' });
       setIsLoading(false);
@@ -162,7 +173,7 @@ const Login: React.FC = () => {
       </div>
 
       {message.text && (
-        <div className={`p-4 mb-6 rounded-xl text-xs font-bold ${message.type === 'error' ? 'bg-rose-500/10 text-rose-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+        <div className={`p-4 mb-6 rounded-xl text-xs font-bold leading-relaxed ${message.type === 'error' ? 'bg-rose-500/10 text-rose-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
           {message.text}
         </div>
       )}
