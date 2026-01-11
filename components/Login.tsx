@@ -30,11 +30,13 @@ const Login: React.FC = () => {
       
       if (!profile) {
         setMessage({ text: 'Access Error: Identity profile missing.', type: 'error' });
+        await signOut(auth);
         return;
       }
 
+      // Block users that are not yet approved by Super Admin
       if (profile.active === false) {
-        setMessage({ text: 'ACCESS DENIED: Your enrollment is still awaiting Super Admin verification.', type: 'error' });
+        setMessage({ text: 'ENROLLMENT PENDING: Your account is currently in the verification queue. A Super Admin will review your credentials shortly.', type: 'error' });
         await signOut(auth);
         return;
       }
@@ -42,7 +44,9 @@ const Login: React.FC = () => {
       setCurrentUser(profile);
     } catch (error: any) {
       let errorMsg = 'Authentication failed. Please check credentials.';
-      if (error.code === 'auth/invalid-credential') errorMsg = 'Invalid email or access token.';
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMsg = 'Invalid email or access token.';
+      }
       setMessage({ text: errorMsg, type: 'error' });
     } finally {
       setIsLoading(false);
@@ -79,11 +83,11 @@ const Login: React.FC = () => {
       
       const newUserProfile: Partial<User> = {
         id: userCredential.user.uid,
-        name,
-        phone,
-        email: emailInput,
+        name: name.trim(),
+        phone: phone.trim(),
+        email: emailInput.trim(),
         role: isSuperAdminEmail ? Role.SuperAdmin : role,
-        active: isSuperAdminEmail,
+        active: isSuperAdminEmail, // Super admin is active by default, others need approval
         commissionBalance: 0,
         totalWithdrawn: 0,
         commissionRate: 0.1
@@ -92,17 +96,16 @@ const Login: React.FC = () => {
       await setProfileData(userCredential.user.uid, newUserProfile);
       
       if (!isSuperAdminEmail) {
-        // Success state for normal users awaiting approval
         setRegistrationSuccess(true);
+        // Log them out immediately so they can't bypass the check until session refresh
         await signOut(auth);
       } else {
-        // Super Admin gets immediate entry
         setCurrentUser(newUserProfile as User);
       }
     } catch (error: any) {
       console.error("Registration error:", error);
       let errorMsg = 'Registration failed.';
-      if (error.code === 'auth/email-already-in-use') errorMsg = 'Email already indexed.';
+      if (error.code === 'auth/email-already-in-use') errorMsg = 'Email already indexed in our registry.';
       setMessage({ text: errorMsg, type: 'error' });
     } finally {
       setIsLoading(false);
@@ -122,23 +125,24 @@ const Login: React.FC = () => {
   if (registrationSuccess) {
     return (
       <div className="bg-slate-900 p-10 rounded-3xl shadow-2xl border border-slate-800 w-full max-w-md mx-auto animate-in zoom-in-95 duration-500 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500"></div>
+        <div className="absolute top-0 left-0 w-full h-1 bg-amber-500"></div>
         <div className="text-center">
-          <div className="w-20 h-20 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-500/20">
+          <div className="w-20 h-20 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6 border border-amber-500/20">
             <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-white font-outfit uppercase tracking-tight mb-4">Registration Successful</h2>
+          <h2 className="text-2xl font-bold text-white font-outfit uppercase tracking-tight mb-4">Enrollment Logged</h2>
           <p className="text-slate-400 text-sm leading-relaxed mb-8">
-            Your enrollment manifest has been encrypted and synced to the cloud. <br /><br />
-            <span className="text-indigo-400 font-bold uppercase tracking-widest text-[10px]">Current Status: Awaiting Admin Approval</span>
+            Success! Your profile has been created. To maintain network integrity, a <span className="text-white font-bold">Super Admin</span> must now approve your access.
+            <br /><br />
+            You will be able to log in once your status is marked as <span className="text-emerald-500 font-bold uppercase tracking-widest text-[10px]">Active</span>.
           </p>
           <button 
             onClick={resetToLogin}
-            className="w-full bg-slate-800 text-white font-bold py-4 rounded-2xl hover:bg-slate-700 transition-all uppercase tracking-[0.2em] text-xs border border-slate-700 shadow-xl"
+            className="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl hover:bg-indigo-500 transition-all uppercase tracking-[0.2em] text-xs shadow-xl shadow-indigo-500/20"
           >
-            Return to Login Terminal
+            Acknowledge & Return
           </button>
         </div>
       </div>
@@ -159,7 +163,7 @@ const Login: React.FC = () => {
       </div>
 
       {message.text && (
-        <div className={`p-4 mb-6 rounded-xl text-xs font-bold ${message.type === 'error' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'}`}>
+        <div className={`p-4 mb-6 rounded-xl text-xs font-bold leading-relaxed ${message.type === 'error' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'}`}>
           {message.text}
         </div>
       )}
