@@ -1,7 +1,7 @@
 
-import React, { useContext, useState, useRef } from 'react';
+import React, { useContext, useState, useRef, useEffect } from 'react';
 import { AppContext } from '../App';
-import { setProfileData } from '../firebase';
+import { setProfileData, updateData } from '../firebase';
 import { NIGERIAN_BANKS } from '../constants';
 import { Role } from '../types';
 
@@ -11,13 +11,27 @@ const UserProfile: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
-    name: currentUser?.name || '',
-    phone: currentUser?.phone || '',
-    bankName: currentUser?.bankDetails?.bankName || '',
-    accountNumber: currentUser?.bankDetails?.accountNumber || '',
-    accountName: currentUser?.bankDetails?.accountName || '',
-    profilePicture: currentUser?.profilePicture || '',
+    name: '',
+    phone: '',
+    bankName: '',
+    accountNumber: '',
+    accountName: '',
+    profilePicture: '',
   });
+
+  useEffect(() => {
+    if (currentUser) {
+      setFormData({
+        name: currentUser.name || '',
+        phone: currentUser.phone || '',
+        bankName: currentUser.bankDetails?.bankName || '',
+        accountNumber: currentUser.bankDetails?.accountNumber || '',
+        accountName: currentUser.bankDetails?.accountName || '',
+        profilePicture: currentUser.profilePicture || '',
+      });
+    }
+  }, [currentUser]);
+
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
@@ -34,10 +48,15 @@ const UserProfile: React.FC = () => {
           accountName: formData.accountName,
         }
       };
+      
+      // Save directly to Firestore 'users' collection
       await setProfileData(currentUser.id, updatedProfile);
+      
+      // Local state update
       setCurrentUser(prev => prev ? { ...prev, ...updatedProfile } : null);
       setIsEditing(false);
     } catch (e) {
+      console.error(e);
       alert("Error saving profile updates.");
     } finally {
       setIsSaving(false);
@@ -47,7 +66,8 @@ const UserProfile: React.FC = () => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 1024 * 1024) { // 1MB limit for Base64 efficiency
+      // 1MB limit for performance
+      if (file.size > 1.2 * 1024 * 1024) { 
         alert("File too large. Please select an image under 1MB.");
         return;
       }
@@ -84,11 +104,11 @@ const UserProfile: React.FC = () => {
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Security Visual</h3>
             <div className="flex flex-col items-center">
               <div className="relative group">
-                <div className="w-40 h-40 rounded-full bg-slate-100 dark:bg-slate-800 border-4 border-slate-200 dark:border-slate-700 overflow-hidden shadow-xl">
+                <div className="w-40 h-40 rounded-full bg-slate-100 dark:bg-slate-800 border-4 border-slate-200 dark:border-slate-700 overflow-hidden shadow-xl flex items-center justify-center">
                   {formData.profilePicture ? (
                     <img src={formData.profilePicture} alt="Avatar" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-400">
+                    <div className="w-full h-full flex items-center justify-center text-slate-300">
                       <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                     </div>
                   )}
