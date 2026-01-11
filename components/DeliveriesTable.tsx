@@ -37,6 +37,16 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
         }
     };
 
+    const handleCancelOrder = async (id: string) => {
+        if (window.confirm("Are you sure you want to cancel this pending delivery?")) {
+            try {
+                await updateData('deliveries', id, { status: DeliveryStatus.Failed });
+            } catch (error) {
+                alert("Cancellation failed.");
+            }
+        }
+    };
+
     const handleAssignRider = async (deliveryId: string, riderId: string) => {
         const rider = allUsers.find(u => u.id === riderId);
         if (!rider) return;
@@ -101,7 +111,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {deliveries.length === 0 ? (
                             <tr>
-                                <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">No logistics records found in this category.</td>
+                                <td colSpan={currentUser?.role === Role.Vendor ? 7 : 6} className="px-6 py-12 text-center text-slate-400 italic">No logistics records found in this category.</td>
                             </tr>
                         ) : deliveries.map((d) => (
                             <tr key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
@@ -148,6 +158,15 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <div className="flex items-center justify-end gap-2">
+                                        {d.status === DeliveryStatus.Pending && [Role.SuperAdmin, Role.Admin].includes(currentUser?.role as Role) && (
+                                            <button 
+                                                onClick={() => handleCancelOrder(d.id)}
+                                                className="px-3 py-1.5 bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all shadow-sm"
+                                            >
+                                                Cancel
+                                            </button>
+                                        )}
+
                                         {d.paymentStatus === PaymentStatus.Unpaid && [Role.SuperAdmin, Role.Admin].includes(currentUser?.role as Role) && (
                                             <button 
                                                 onClick={() => handleVerifyPayment(d.id)}
@@ -162,7 +181,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
                                             </button>
                                         )}
 
-                                        {[Role.SuperAdmin, Role.Admin, Role.Vendor].includes(currentUser?.role as Role) && !d.rider && (
+                                        {[Role.SuperAdmin, Role.Admin, Role.Vendor].includes(currentUser?.role as Role) && !d.rider && d.status !== DeliveryStatus.Failed && (
                                             <select 
                                                 onChange={(e) => handleAssignRider(d.id, e.target.value)}
                                                 className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1.5 rounded-lg outline-none cursor-pointer"

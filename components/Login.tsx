@@ -26,20 +26,20 @@ const Login: React.FC = () => {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, emailInput.trim(), password);
-      
-      // Fetch profile with a fresh read to avoid cache issues for newly approved users
       const profile = await getUserProfile(userCredential.user.uid);
       
       if (!profile) {
         setMessage({ text: 'Access Error: Identity profile missing.', type: 'error' });
         await signOut(auth);
+        setIsLoading(false);
         return;
       }
 
-      // Check if user is active. Super Admins are usually active by default.
       if (profile.active === false) {
         setMessage({ text: 'ENROLLMENT PENDING: Your account is awaiting Super Admin verification. Please try again after approval.', type: 'error' });
-        await signOut(auth);
+        // We stay logged in (Auth-wise) so that the App.tsx listener can detect when 'active' becomes true
+        // But we don't call setCurrentUser here; App.tsx handles the state transition.
+        setIsLoading(false);
         return;
       }
 
@@ -90,7 +90,7 @@ const Login: React.FC = () => {
         phone: phone.trim(),
         email: trimmedEmail,
         role: isSuperAdminEmail ? Role.SuperAdmin : role,
-        active: isSuperAdminEmail, // Automatically active if it's the super admin email
+        active: isSuperAdminEmail, 
         commissionBalance: 0,
         totalWithdrawn: 0,
         commissionRate: 0.1
@@ -98,9 +98,8 @@ const Login: React.FC = () => {
 
       await setProfileData(userCredential.user.uid, newUserProfile);
       
+      setIsLoading(false);
       if (!isSuperAdminEmail) {
-        // Explicitly sign out after registration so they can't bypass approval
-        await signOut(auth);
         setRegistrationSuccess(true);
       } else {
         setCurrentUser(newUserProfile as User);
@@ -111,7 +110,6 @@ const Login: React.FC = () => {
       if (error.code === 'auth/email-already-in-use') errorMsg = 'Email already registered.';
       if (error.code === 'auth/weak-password') errorMsg = 'Password is too weak.';
       setMessage({ text: errorMsg, type: 'error' });
-    } finally {
       setIsLoading(false);
     }
   };
