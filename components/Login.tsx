@@ -1,3 +1,4 @@
+
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { Role, User } from '../types';
@@ -6,6 +7,7 @@ import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, setPr
 const Login: React.FC = () => {
   const { setCurrentUser } = useContext(AppContext);
   const [view, setView] = useState<'login' | 'register' | 'forgot'>('login');
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
   
   const [emailInput, setEmailInput] = useState('');
   const [password, setPassword] = useState('');
@@ -90,10 +92,11 @@ const Login: React.FC = () => {
       await setProfileData(userCredential.user.uid, newUserProfile);
       
       if (!isSuperAdminEmail) {
-        setMessage({ text: 'ENROLLMENT LOGGED: Wait for Super Admin approval.', type: 'success' });
+        // Success state for normal users awaiting approval
+        setRegistrationSuccess(true);
         await signOut(auth);
-        setView('login');
       } else {
+        // Super Admin gets immediate entry
         setCurrentUser(newUserProfile as User);
       }
     } catch (error: any) {
@@ -105,6 +108,42 @@ const Login: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  const resetToLogin = () => {
+    setRegistrationSuccess(false);
+    setView('login');
+    setEmailInput('');
+    setPassword('');
+    setName('');
+    setPhone('');
+    setMessage({ text: '', type: 'info' });
+  };
+
+  if (registrationSuccess) {
+    return (
+      <div className="bg-slate-900 p-10 rounded-3xl shadow-2xl border border-slate-800 w-full max-w-md mx-auto animate-in zoom-in-95 duration-500 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500"></div>
+        <div className="text-center">
+          <div className="w-20 h-20 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-500/20">
+            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-white font-outfit uppercase tracking-tight mb-4">Registration Successful</h2>
+          <p className="text-slate-400 text-sm leading-relaxed mb-8">
+            Your enrollment manifest has been encrypted and synced to the cloud. <br /><br />
+            <span className="text-indigo-400 font-bold uppercase tracking-widest text-[10px]">Current Status: Awaiting Admin Approval</span>
+          </p>
+          <button 
+            onClick={resetToLogin}
+            className="w-full bg-slate-800 text-white font-bold py-4 rounded-2xl hover:bg-slate-700 transition-all uppercase tracking-[0.2em] text-xs border border-slate-700 shadow-xl"
+          >
+            Return to Login Terminal
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-900 p-10 rounded-3xl shadow-2xl border border-slate-800 w-full max-w-md mx-auto transition-all relative overflow-hidden">
@@ -184,7 +223,7 @@ const Login: React.FC = () => {
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Full Identity Name</label>
-            <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="form-input-dark" disabled={isLoading} placeholder="Super Admin" />
+            <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="form-input-dark" disabled={isLoading} placeholder="John Doe" />
           </div>
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Corporate Email</label>
@@ -210,7 +249,9 @@ const Login: React.FC = () => {
             <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="form-input-dark" disabled={isLoading} placeholder="Min 6 characters" />
           </div>
           <button type="submit" className="btn-primary-dark mt-4 flex items-center justify-center gap-2" disabled={isLoading}>
-            Confirm Enrollment
+            {isLoading ? (
+               <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            ) : 'Confirm Enrollment'}
           </button>
           <button type="button" onClick={() => setView('login')} className="w-full text-[10px] font-bold text-slate-500 uppercase tracking-widest py-2" disabled={isLoading}>Return to Login</button>
         </form>
