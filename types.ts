@@ -7,6 +7,8 @@ export enum Role {
   Customer = 'Customer',
 }
 
+export type RiderStatus = 'Available' | 'On Delivery' | 'Offline';
+
 export enum DeliveryStatus {
   Pending = 'Pending',
   Assigned = 'Assigned',
@@ -46,6 +48,8 @@ export interface User {
   totalWithdrawn?: number; 
   commissionRate?: number; 
   vehicle?: string;
+  licenseDetails?: string;
+  riderStatus?: RiderStatus;
   active?: boolean;
   location?: Location;
 }
@@ -91,6 +95,7 @@ export interface SystemSettings {
     theme: 'light' | 'dark';
     standardCommissionRate: number;
     pricePerKm: number; 
+    baseStartingPrice: number;
 }
 
 export interface VendorPerformance {

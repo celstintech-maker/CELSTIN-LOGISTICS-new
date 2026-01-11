@@ -40,7 +40,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   footerText: '© 2024 CLESTIN LOGISTICS. Premium Delivery Intelligence.',
   theme: 'dark',
   standardCommissionRate: 0.1,
-  pricePerKm: 150
+  pricePerKm: 150,
+  baseStartingPrice: 3000
 };
 
 export const AppContext = React.createContext<{
@@ -89,7 +90,7 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatHistory, setChatHistory] = useState<any[]>([]);
   const [recoveryRequests, setRecoveryRequests] = useState<RecoveryRequest[]>([]);
   const [vendorPerformance, setVendorPerformance] = useState<VendorPerformance[]>(MOCK_VENDORS_PERFORMANCE);
   const [isCloudConnected, setIsCloudConnected] = useState(true);

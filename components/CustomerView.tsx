@@ -28,7 +28,7 @@ const CustomerView: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const form = e.currentTarget; // Capture ref before async
+        const form = e.currentTarget;
         setIsSubmitting(true);
         const formData = new FormData(form);
         
@@ -40,7 +40,7 @@ const CustomerView: React.FC = () => {
             },
             pickupAddress: origin.trim(),
             dropoffAddress: destination.trim(),
-            packageNotes: (formData.get('packageNotes') as string || 'Standard Delivery').trim(),
+            packageNotes: (formData.get('packageNotes') as string || 'General Package').trim(),
             status: DeliveryStatus.Pending,
             paymentStatus: PaymentStatus.Unpaid,
             price: pricePreview,
@@ -52,12 +52,12 @@ const CustomerView: React.FC = () => {
             const firebaseId = await pushData('deliveries', newDelivery);
             setLastDeliveryId(firebaseId || 'pending');
             setShowPaymentModal(true);
-            form.reset(); // Safely reset the captured form
+            form.reset();
             setOrigin('');
             setDestination('');
         } catch (error) {
             console.error(error);
-            alert("Connection error. Terminal sync failed. Please try again.");
+            alert("Connection error. Please try again.");
         } finally {
             setIsSubmitting(false);
         }
@@ -72,25 +72,25 @@ const CustomerView: React.FC = () => {
                     {systemSettings.heroSubtext}
                 </p>
                 <p className="mt-2 text-sm font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">
-                    Starting at ₦{(systemSettings.pricePerKm * 10).toLocaleString()} base rate
+                    Reliable Dispatch starting at ₦{(systemSettings.baseStartingPrice || 3000).toLocaleString()}
                 </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                        <label htmlFor="customerName" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Client Identity</label>
-                        <input type="text" name="customerName" id="customerName" required className="customer-input" placeholder="Full Legal Name" />
+                        <label htmlFor="customerName" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Client Name</label>
+                        <input type="text" name="customerName" id="customerName" required className="customer-input" placeholder="Enter your full name" />
                     </div>
                     <div className="space-y-2">
-                        <label htmlFor="customerPhone" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Contact Protocol</label>
-                        <input type="tel" name="customerPhone" id="customerPhone" required className="customer-input" placeholder="080 0000 0000" />
+                        <label htmlFor="customerPhone" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Contact Number</label>
+                        <input type="tel" name="customerPhone" id="customerPhone" required className="customer-input" placeholder="Phone number (e.g. 080...)" />
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                        <label htmlFor="pickupAddress" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Origin Terminal</label>
+                        <label htmlFor="pickupAddress" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Pickup Address</label>
                         <input 
                             type="text" 
                             name="pickupAddress" 
@@ -99,11 +99,11 @@ const CustomerView: React.FC = () => {
                             value={origin}
                             onChange={(e) => setOrigin(e.target.value)}
                             className="customer-input" 
-                            placeholder="Pickup location in Asaba" 
+                            placeholder="Where should we pick up?" 
                         />
                     </div>
                     <div className="space-y-2">
-                        <label htmlFor="dropoffAddress" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Destination Node</label>
+                        <label htmlFor="dropoffAddress" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Delivery Address</label>
                         <input 
                             type="text" 
                             name="dropoffAddress" 
@@ -112,14 +112,14 @@ const CustomerView: React.FC = () => {
                             value={destination}
                             onChange={(e) => setDestination(e.target.value)}
                             className="customer-input" 
-                            placeholder="Final dropoff location" 
+                            placeholder="Where is it going?" 
                         />
                     </div>
                 </div>
 
                 <div className="space-y-2">
-                    <label htmlFor="packageNotes" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Payload Manifest</label>
-                    <textarea name="packageNotes" id="packageNotes" rows={2} className="customer-input" placeholder="Describe payload or special handling requirements..."></textarea>
+                    <label htmlFor="packageNotes" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Item Description</label>
+                    <textarea name="packageNotes" id="packageNotes" rows={2} className="customer-input" placeholder="What are you sending?"></textarea>
                 </div>
 
                 <div className="text-center pt-4">
@@ -131,7 +131,7 @@ const CustomerView: React.FC = () => {
                         {isSubmitting && (
                              <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         )}
-                        {isSubmitting ? 'Transmitting...' : `Initialize Protocol - ₦${pricePreview.toLocaleString()}`}
+                        {isSubmitting ? 'Processing...' : `Confirm Delivery - ₦${pricePreview.toLocaleString()}`}
                     </button>
                 </div>
             </form>
@@ -142,33 +142,21 @@ const CustomerView: React.FC = () => {
                         <div className="w-16 h-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 font-outfit uppercase">Manifest Encrypted</h3>
-                        <p className="text-slate-500 dark:text-slate-400 mb-6 text-sm leading-relaxed">System initialized. Transmit settlement of ₦{pricePreview.toLocaleString()} to the corporate vault for instant activation.</p>
+                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 font-outfit uppercase">Order Received!</h3>
+                        <p className="text-slate-500 dark:text-slate-400 mb-6 text-sm leading-relaxed">Please pay ₦{pricePreview.toLocaleString()} to start your delivery.</p>
                         <div className="bg-slate-50 dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 text-left space-y-4">
                             <div>
-                                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">Vault Holder</p>
-                                <p className="text-slate-900 dark:text-slate-100 font-bold tracking-tight">{systemSettings.paymentAccountName}</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Account Name</p>
+                                <p className="text-slate-900 dark:text-slate-100 font-bold">{systemSettings.paymentAccountName}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">Vault Index (Account Number)</p>
-                                <div className="flex items-center justify-between">
-                                    <p className="text-indigo-600 dark:text-indigo-400 font-mono text-xl font-black">{systemSettings.paymentAccountNumber}</p>
-                                    <button onClick={() => navigator.clipboard.writeText(systemSettings.paymentAccountNumber)} className="text-slate-400 hover:text-indigo-500 transition-colors">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
-                                    </button>
-                                </div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Account Number</p>
+                                <p className="text-indigo-600 dark:text-indigo-400 font-mono text-xl font-black">{systemSettings.paymentAccountNumber}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">Gateway Node</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Bank Name</p>
                                 <p className="text-slate-900 dark:text-slate-100 font-bold">{systemSettings.paymentBank}</p>
                             </div>
-                        </div>
-                        <div className="mt-6 flex flex-col items-center gap-2">
-                             <div className="flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Awaiting Verification Signal...</span>
-                             </div>
-                             <p className="text-[11px] text-slate-400 italic">Order #{lastDeliveryId?.slice(-5)} status will update in real-time upon detection.</p>
                         </div>
                     </div>
                 </Modal>
@@ -186,24 +174,8 @@ const CustomerView: React.FC = () => {
                     transition: all 0.2s;
                     font-weight: 500;
                 }
-                .dark .customer-input {
-                    background: rgba(15, 23, 42, 0.5);
-                    border: 1px solid #1e293b;
-                    color: white;
-                }
-                .customer-input:focus {
-                    border-color: #6366f1;
-                    background: white;
-                    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
-                }
-                .dark .customer-input:focus {
-                    background: rgba(30, 41, 59, 0.8);
-                    border-color: #6366f1;
-                    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
-                }
-                .customer-input::placeholder {
-                    color: #94a3b8;
-                }
+                .dark .customer-input { background: rgba(15, 23, 42, 0.5); border: 1px solid #1e293b; color: white; }
+                .customer-input:focus { border-color: #6366f1; background: white; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }
             `}</style>
         </div>
     );

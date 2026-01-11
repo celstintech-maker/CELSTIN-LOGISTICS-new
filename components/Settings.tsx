@@ -92,19 +92,34 @@ const Settings: React.FC = () => {
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 <div className="space-y-8">
                     <SettingsCard title="Logistics Pricing">
-                         <FormField label="Standard Price per KM (₦)">
-                            <div className="relative">
-                              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">₦</span>
-                              <input 
-                                type="number" 
-                                name="pricePerKm" 
-                                value={settings.pricePerKm} 
-                                onChange={handleInputChange} 
-                                className="form-input pl-10" 
-                                placeholder="150"
-                              />
-                            </div>
-                        </FormField>
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <FormField label="Standard Price per KM (₦)">
+                                <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">₦</span>
+                                <input 
+                                    type="number" 
+                                    name="pricePerKm" 
+                                    value={settings.pricePerKm} 
+                                    onChange={handleInputChange} 
+                                    className="form-input pl-10" 
+                                    placeholder="150"
+                                />
+                                </div>
+                            </FormField>
+                            <FormField label="Hero Display Start Price (₦)">
+                                <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">₦</span>
+                                <input 
+                                    type="number" 
+                                    name="baseStartingPrice" 
+                                    value={settings.baseStartingPrice} 
+                                    onChange={handleInputChange} 
+                                    className="form-input pl-10" 
+                                    placeholder="3000"
+                                />
+                                </div>
+                            </FormField>
+                         </div>
                     </SettingsCard>
 
                     <SettingsCard title="Identity & Branding">
