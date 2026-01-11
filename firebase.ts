@@ -11,14 +11,17 @@ import {
   where,
   getDoc,
   serverTimestamp,
-  enableIndexedDbPersistence
+  enableIndexedDbPersistence,
+  orderBy,
+  limit
 } from "firebase/firestore";
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  sendPasswordResetEmail
 } from "firebase/auth";
 import { User } from "./types";
 
@@ -36,7 +39,6 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
-// Enable offline persistence for better mobile reliability
 enableIndexedDbPersistence(db).catch((err) => {
     if (err.code === 'failed-precondition') {
         console.warn('Multiple tabs open, persistence enabled in only one.');
@@ -45,11 +47,8 @@ enableIndexedDbPersistence(db).catch((err) => {
     }
 });
 
-export { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged };
+export { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail };
 
-/**
- * Fetches user metadata from Firestore based on their Auth UID
- */
 export const getUserProfile = async (uid: string): Promise<User | null> => {
   try {
     const docRef = doc(db, "users", uid);
@@ -75,11 +74,20 @@ export const syncCollection = (collectionName: string, callback: (data: any[]) =
   });
 };
 
+export const syncChat = (callback: (messages: any[]) => void) => {
+  const q = query(collection(db, "messages"), orderBy("timestamp", "asc"), limit(100));
+  return onSnapshot(q, (snapshot) => {
+    const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    callback(messages);
+  });
+};
+
 export const pushData = async (collectionName: string, data: any) => {
   try {
     const docRef = await addDoc(collection(db, collectionName), {
       ...data,
-      createdAt: serverTimestamp()
+      createdAt: serverTimestamp(),
+      timestamp: serverTimestamp()
     });
     return docRef.id;
   } catch (e: any) {

@@ -1,16 +1,25 @@
-
 import React, { useState, useContext, useEffect, useRef } from 'react';
-import { AppContext, ChatMessage } from '../App';
+import { AppContext } from '../App';
 import { ChatBubbleIcon } from './icons';
 import { Role } from '../types';
+import { pushData, syncChat, db } from '../firebase';
+import { collection, deleteDoc, getDocs } from 'firebase/firestore';
 
 const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { currentUser, chatHistory, setChatHistory } = useContext(AppContext);
+  const { currentUser } = useContext(AppContext);
+  const [chatHistory, setChatHistory] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = currentUser?.role === Role.Admin || currentUser?.role === Role.SuperAdmin;
+
+  useEffect(() => {
+    const unsub = syncChat((messages) => {
+      setChatHistory(messages);
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -18,26 +27,31 @@ const ChatWidget: React.FC = () => {
     }
   }, [chatHistory, isOpen]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
 
-    const newMessage: ChatMessage = {
-        id: `msg-${Date.now()}`,
+    const messagePayload = {
         senderId: currentUser?.id || 'guest',
         senderName: currentUser?.name || 'Guest Customer',
         text: inputText,
-        timestamp: new Date(),
         isAdmin: isAdmin
     };
 
-    setChatHistory(prev => [...prev, newMessage]);
-    setInputText('');
+    try {
+      await pushData('messages', messagePayload);
+      setInputText('');
+    } catch (err) {
+      alert("Comms error: Could not transmit message.");
+    }
   };
 
-  const clearHistory = () => {
-    if (window.confirm("Clear corporate chat history?")) {
-        setChatHistory([]);
+  const clearHistory = async () => {
+    if (window.confirm("Clear corporate chat history? This is irreversible.")) {
+        const querySnapshot = await getDocs(collection(db, "messages"));
+        querySnapshot.forEach(async (d) => {
+          await deleteDoc(d.ref);
+        });
     }
   };
 
@@ -65,7 +79,7 @@ const ChatWidget: React.FC = () => {
                         <ChatBubbleIcon className="w-6 h-6" />
                     </div>
                     <p className="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
-                        {isAdmin ? 'No active support requests found in the queue.' : 'Encrypted link established. Type below to reach a Super Admin.'}
+                        {isAdmin ? 'No active support requests found in the queue.' : 'Encrypted link established. Type below to reach support.'}
                     </p>
                 </div>
             ) : (
@@ -81,7 +95,7 @@ const ChatWidget: React.FC = () => {
                             <p>{msg.text}</p>
                         </div>
                         <span className="text-[8px] font-black uppercase text-slate-400 mt-1 px-1 tracking-tighter">
-                            {msg.senderName} • {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {msg.senderName} • {msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}
                         </span>
                     </div>
                 ))
@@ -114,12 +128,6 @@ const ChatWidget: React.FC = () => {
         }`}
         aria-label="Toggle chat"
       >
-        {!isOpen && chatHistory.length > 0 && !isAdmin && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white text-[10px] font-black flex items-center justify-center rounded-full animate-bounce ring-4 ring-white dark:ring-slate-900">!</span>
-        )}
-        {isAdmin && chatHistory.length > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 text-white text-[10px] font-black flex items-center justify-center rounded-full ring-4 ring-white dark:ring-slate-900">{chatHistory.length}</span>
-        )}
         {isOpen ? (
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
         ) : (

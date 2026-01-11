@@ -1,10 +1,10 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { Role, User } from '../types';
-import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, setProfileData, getUserProfile, signOut } from '../firebase';
+import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, setProfileData, getUserProfile, signOut, sendPasswordResetEmail } from '../firebase';
 
 const Login: React.FC = () => {
-  const { setCurrentUser, setRecoveryRequests } = useContext(AppContext);
+  const { setCurrentUser } = useContext(AppContext);
   const [view, setView] = useState<'login' | 'register' | 'forgot'>('login');
   
   const [emailInput, setEmailInput] = useState('');
@@ -31,7 +31,6 @@ const Login: React.FC = () => {
         return;
       }
 
-      // STRICT APPROVAL CHECK
       if (profile.active === false) {
         setMessage({ text: 'ACCESS DENIED: Your enrollment is still awaiting Super Admin verification.', type: 'error' });
         await signOut(auth);
@@ -48,12 +47,29 @@ const Login: React.FC = () => {
     }
   };
 
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailInput) {
+      setMessage({ text: 'Please enter your email address.', type: 'error' });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, emailInput);
+      setMessage({ text: 'Reset link sent to your inbox. Check your spam if not found.', type: 'success' });
+      setView('login');
+    } catch (error: any) {
+      setMessage({ text: 'Failed to send reset email. ' + error.message, type: 'error' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setMessage({ text: '', type: 'info' });
 
-    // support@celstin.com gets automatic SuperAdmin approval
     const isSuperAdminEmail = emailInput.toLowerCase() === 'support@celstin.com';
 
     try {
@@ -65,7 +81,7 @@ const Login: React.FC = () => {
         phone,
         email: emailInput,
         role: isSuperAdminEmail ? Role.SuperAdmin : role,
-        active: isSuperAdminEmail, // ONLY SuperAdmin email is auto-active
+        active: isSuperAdminEmail,
         commissionBalance: 0,
         totalWithdrawn: 0,
         commissionRate: 0.1
@@ -74,11 +90,10 @@ const Login: React.FC = () => {
       await setProfileData(userCredential.user.uid, newUserProfile);
       
       if (!isSuperAdminEmail) {
-        setMessage({ text: 'ENROLLMENT LOGGED: You must wait for a Super Admin to approve your terminal access.', type: 'success' });
+        setMessage({ text: 'ENROLLMENT LOGGED: Wait for Super Admin approval.', type: 'success' });
         await signOut(auth);
         setView('login');
       } else {
-        // Cast here to User because we know we just created it with all required fields
         setCurrentUser(newUserProfile as User);
       }
     } catch (error: any) {
@@ -110,7 +125,26 @@ const Login: React.FC = () => {
         </div>
       )}
 
-      {view === 'login' && (
+      {view === 'forgot' ? (
+        <form onSubmit={handlePasswordReset} className="space-y-6">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Corporate Email</label>
+            <input 
+              type="email" 
+              required 
+              placeholder="support@celstin.com" 
+              className="form-input-dark" 
+              value={emailInput} 
+              onChange={(e) => setEmailInput(e.target.value)}
+              disabled={isLoading}
+            />
+          </div>
+          <button type="submit" disabled={isLoading} className="btn-primary-dark">
+            {isLoading ? 'Processing...' : 'Send Recovery Link'}
+          </button>
+          <button type="button" onClick={() => setView('login')} className="w-full text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-6">Return to Login</button>
+        </form>
+      ) : view === 'login' ? (
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Corporate Email</label>
@@ -146,9 +180,7 @@ const Login: React.FC = () => {
             <button type="button" onClick={() => setView('forgot')} className="hover:text-indigo-300">Lost Key?</button>
           </div>
         </form>
-      )}
-
-      {view === 'register' && (
+      ) : (
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Full Identity Name</label>

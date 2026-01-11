@@ -1,4 +1,3 @@
-
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { Role } from '../types';
@@ -9,13 +8,13 @@ import ManageStaff from './ManageStaff';
 import Settings from './Settings';
 import MapView from './MapView';
 import VendorFinancials from './VendorFinancials';
+import UserProfile from './UserProfile';
 
 const Dashboard: React.FC = () => {
-  const { currentUser, setCurrentUser, deliveries, allUsers, setAllUsers, syncFromCloud } = useContext(AppContext);
+  const { currentUser, deliveries, allUsers, setAllUsers, syncFromCloud } = useContext(AppContext);
   const [activeTab, setActiveTab] = useState('deliveries');
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Filter deliveries based on role for a "Clean" experience
   const userDeliveries = deliveries.filter(d => {
     if (currentUser?.role === Role.SuperAdmin || currentUser?.role === Role.Admin) return true;
     if (currentUser?.role === Role.Rider) return d.rider?.id === currentUser.id;
@@ -25,14 +24,6 @@ const Dashboard: React.FC = () => {
   });
 
   const hasActivity = userDeliveries.length > 0;
-
-  const handleCloudSync = async () => {
-    setIsSyncing(true);
-    await new Promise(r => setTimeout(r, 1500));
-    await syncFromCloud();
-    setIsSyncing(false);
-    alert("Fleet Registry Synchronized with Cloud.");
-  };
 
   const settleVendor = (vendorId: string) => {
     const vendor = allUsers.find(u => u.id === vendorId);
@@ -96,11 +87,8 @@ const Dashboard: React.FC = () => {
                 </div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white font-outfit uppercase">System Clean & Ready</h3>
                 <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-2 text-sm">
-                  Welcome to your terminal, <span className="font-bold text-indigo-500">{currentUser?.name}</span>. Your dispatch history is currently empty. Start your first delivery to see real-time logistics analytics.
+                  Welcome to your terminal, <span className="font-bold text-indigo-500">{currentUser?.name}</span>. Your dispatch history is currently empty.
                 </p>
-                {currentUser?.role === Role.Customer && (
-                   <p className="mt-8 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Awaiting your first request</p>
-                )}
               </div>
             ) : (
               <>
@@ -116,6 +104,8 @@ const Dashboard: React.FC = () => {
         return <ManageStaff />;
       case 'financials':
         return <VendorFinancials settleVendor={settleVendor} />;
+      case 'profile':
+        return <UserProfile />;
       case 'settings':
         return <Settings />;
       default:
@@ -128,6 +118,7 @@ const Dashboard: React.FC = () => {
     { id: 'map', label: 'Live Fleet', icon: <MapIcon className="w-5 h-5" />, roles: [Role.SuperAdmin, Role.Admin, Role.Rider] },
     { id: 'manageStaff', label: 'Workforce', icon: <UserCircleIcon className="w-5 h-5" />, roles: [Role.SuperAdmin, Role.Admin] },
     { id: 'financials', label: 'Financials', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>, roles: [Role.SuperAdmin] },
+    { id: 'profile', label: 'Identity', icon: <UserCircleIcon className="w-5 h-5" />, roles: [Role.SuperAdmin, Role.Admin, Role.Vendor, Role.Rider, Role.Customer] },
     { id: 'settings', label: 'Core Config', icon: <CogIcon className="w-5 h-5" />, roles: [Role.SuperAdmin] },
   ];
 
