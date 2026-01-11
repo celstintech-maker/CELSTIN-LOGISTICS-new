@@ -84,6 +84,7 @@ export interface Delivery {
   price: number;
   estimatedMinutes?: number;
   transportMode?: VehicleMode;
+  timeModifiedByAdmin?: boolean;
   createdAt: any; 
 }
 
