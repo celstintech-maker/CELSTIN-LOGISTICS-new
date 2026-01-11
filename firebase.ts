@@ -1,3 +1,4 @@
+
 import { initializeApp } from "firebase/app";
 import { 
   getFirestore, 
@@ -11,9 +12,11 @@ import {
   where,
   getDoc,
   serverTimestamp,
-  enableIndexedDbPersistence,
   orderBy,
-  limit
+  limit,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager
 } from "firebase/firestore";
 import { 
   getAuth, 
@@ -36,16 +39,16 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-export const auth = getAuth(app);
 
-enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-        console.warn('Multiple tabs open, persistence enabled in only one.');
-    } else if (err.code === 'unimplemented') {
-        console.warn('Persistence is not supported in this environment.');
-    }
+// Modernized Firestore initialization with the new Cache API
+// This replaces enableIndexedDbPersistence() and handles multi-tab sync automatically.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
 });
+
+export const auth = getAuth(app);
 
 export { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail };
 
