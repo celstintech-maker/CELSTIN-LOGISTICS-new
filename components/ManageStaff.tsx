@@ -2,19 +2,19 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { User, Role, RiderStatus } from '../types';
-import { updateData, db } from '../firebase';
-import { deleteDoc, doc } from 'firebase/firestore';
+import { updateData } from '../firebase';
 
 const ManageStaff: React.FC = () => {
     const { allUsers, currentUser } = useContext(AppContext);
     const [actionMessage, setActionMessage] = useState({ text: '', type: 'info' });
     const [isUpdating, setIsUpdating] = useState<string | null>(null);
+    const [showDeleted, setShowDeleted] = useState(false);
 
     const isSuperAdmin = currentUser?.role === Role.SuperAdmin;
-    const isAdmin = currentUser?.role === Role.Admin || isSuperAdmin;
 
-    const pendingUsers = allUsers.filter(u => u.active === false);
-    const activeUsers = allUsers.filter(u => u.active === true);
+    const pendingUsers = allUsers.filter(u => u.active === false && !u.isDeleted);
+    const activeUsers = allUsers.filter(u => u.active === true && !u.isDeleted);
+    const deletedUsers = allUsers.filter(u => u.isDeleted === true);
 
     const showToast = (text: string, type: 'info' | 'error' | 'success' = 'info') => {
         setActionMessage({ text, type });
@@ -26,6 +26,7 @@ const ManageStaff: React.FC = () => {
         try {
             await updateData('users', userId, { 
                 active: true,
+                isDeleted: false,
                 riderStatus: 'Offline' 
             });
             showToast('Account verified successfully.', 'success');
@@ -36,17 +37,35 @@ const ManageStaff: React.FC = () => {
         }
     };
 
-    const handleRejectPermanent = async (userId: string) => {
-        if (window.confirm('PERMANENT DELETION: This will remove the user from the database entirely. They will need to re-register to access the platform again. Continue?')) {
+    const handleSoftDelete = async (userId: string) => {
+        if (window.confirm('Archive User: This will deactivate the account and move it to the Recycle Bin. Continue?')) {
             setIsUpdating(userId);
             try {
-                await deleteDoc(doc(db, 'users', userId));
-                showToast('User record permanently purged from database.', 'info');
+                await updateData('users', userId, { 
+                    isDeleted: true,
+                    active: false 
+                });
+                showToast('User moved to Recycle Bin.', 'info');
             } catch (error) {
-                showToast('Purge operation failed.', 'error');
+                showToast('Archive operation failed.', 'error');
             } finally {
                 setIsUpdating(null);
             }
+        }
+    };
+
+    const handleRestore = async (userId: string) => {
+        setIsUpdating(userId);
+        try {
+            await updateData('users', userId, { 
+                isDeleted: false, 
+                active: true 
+            });
+            showToast('User account restored to active status.', 'success');
+        } catch (error) {
+            showToast('Restoration failed.', 'error');
+        } finally {
+            setIsUpdating(null);
         }
     };
 
@@ -83,7 +102,59 @@ const ManageStaff: React.FC = () => {
                 </div>
             )}
 
-            {isSuperAdmin && pendingUsers.length > 0 && (
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white uppercase tracking-tight font-outfit">Master Workforce Registry</h2>
+                    <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mt-1">Verified Fleet Personnel & Merchant Partners</p>
+                </div>
+                {isSuperAdmin && (
+                    <button 
+                        onClick={() => setShowDeleted(!showDeleted)}
+                        className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+                            showDeleted 
+                            ? 'bg-indigo-600 text-white shadow-lg' 
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        {showDeleted ? 'Close Recycle Bin' : `View Deleted Accounts (${deletedUsers.length})`}
+                    </button>
+                )}
+            </div>
+
+            {isSuperAdmin && showDeleted && (
+                <div className="bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/30 p-8 rounded-2xl animate-in slide-in-from-top-4">
+                    <h2 className="text-xl font-bold text-rose-900 dark:text-rose-400 uppercase tracking-tight mb-6 flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 bg-rose-500 rounded-full"></span>
+                        Recycle Bin: Terminated Accounts
+                    </h2>
+                    {deletedUsers.length === 0 ? (
+                        <p className="text-sm text-rose-400 italic">Recycle bin is empty.</p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {deletedUsers.map(u => (
+                                <div key={u.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-rose-200 dark:border-rose-900/30 shadow-sm relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-2 opacity-20">
+                                        <svg className="w-12 h-12 text-rose-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                                    </div>
+                                    <p className="font-bold text-slate-900 dark:text-white">{u.name}</p>
+                                    <p className="text-xs text-slate-500 uppercase font-black mt-1">{u.role}</p>
+                                    <p className="text-[10px] text-slate-400 mt-1 font-mono">{u.email}</p>
+                                    <button 
+                                        onClick={() => handleRestore(u.id)} 
+                                        disabled={isUpdating === u.id}
+                                        className="w-full mt-5 bg-indigo-600 text-white text-[10px] font-black py-2.5 rounded-lg hover:bg-indigo-500 transition-colors uppercase tracking-widest shadow-md shadow-indigo-500/20"
+                                    >
+                                        {isUpdating === u.id ? 'Restoring...' : 'Restore Account'}
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {isSuperAdmin && pendingUsers.length > 0 && !showDeleted && (
                 <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 p-8 rounded-2xl">
                     <h2 className="text-xl font-bold text-amber-900 dark:text-amber-400 uppercase tracking-tight mb-6 flex items-center gap-2">
                         <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
@@ -97,7 +168,7 @@ const ManageStaff: React.FC = () => {
                                 <p className="text-[10px] text-slate-400 mt-1 font-mono">{u.email}</p>
                                 <div className="flex gap-2 mt-5">
                                     <button onClick={() => handleApprove(u.id)} disabled={isUpdating === u.id} className="flex-1 bg-emerald-600 text-white text-[10px] font-black py-2.5 rounded-lg hover:bg-emerald-500 transition-colors">Verify</button>
-                                    <button onClick={() => handleRejectPermanent(u.id)} disabled={isUpdating === u.id} className="flex-1 bg-white dark:bg-slate-800 text-rose-600 border border-rose-100 dark:border-rose-900/50 text-[10px] font-black py-2.5 rounded-lg hover:bg-rose-50 transition-colors">Reject</button>
+                                    <button onClick={() => handleSoftDelete(u.id)} disabled={isUpdating === u.id} className="flex-1 bg-white dark:bg-slate-800 text-rose-600 border border-rose-100 dark:border-rose-900/50 text-[10px] font-black py-2.5 rounded-lg hover:bg-rose-50 transition-colors">Reject</button>
                                 </div>
                             </div>
                         ))}
@@ -106,10 +177,6 @@ const ManageStaff: React.FC = () => {
             )}
 
             <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-x-auto">
-                <div className="mb-6">
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white uppercase tracking-tight font-outfit">Master Workforce Registry</h2>
-                    <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mt-1">Verified Fleet Personnel & Merchant Partners</p>
-                </div>
                 <table className="w-full text-left text-sm">
                     <thead className="text-slate-500 font-bold uppercase tracking-widest text-[10px] bg-slate-50/50 dark:bg-slate-950/50">
                         <tr>
@@ -187,12 +254,12 @@ const ManageStaff: React.FC = () => {
                                     )}
                                 </td>
                                 <td className="px-6 py-4 text-right">
-                                    {isSuperAdmin && user.id !== currentUser?.id && (
+                                    {(isSuperAdmin || (currentUser?.role === Role.Admin && user.role !== Role.SuperAdmin)) && user.id !== currentUser?.id && (
                                         <button 
-                                            onClick={() => handleRejectPermanent(user.id)} 
+                                            onClick={() => handleSoftDelete(user.id)} 
                                             disabled={isUpdating === user.id}
                                             className="text-rose-500 p-2 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors group"
-                                            title="Permanently Remove User"
+                                            title="Archive User Account"
                                         >
                                             <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

@@ -53,6 +53,7 @@ export interface User {
   licenseDetails?: string;
   riderStatus?: RiderStatus;
   active?: boolean;
+  isDeleted?: boolean;
   location?: Location;
   locationStatus?: 'Active' | 'Disabled';
   profilePicture?: string;
