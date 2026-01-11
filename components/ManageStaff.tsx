@@ -2,6 +2,8 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { User, Role } from '../types';
+import { updateData, db } from '../firebase';
+import { deleteDoc, doc } from 'firebase/firestore';
 
 const ManageStaff: React.FC = () => {
     const { allUsers, setAllUsers, currentUser, recoveryRequests, setRecoveryRequests } = useContext(AppContext);
@@ -20,27 +22,34 @@ const ManageStaff: React.FC = () => {
         setTimeout(() => setActionMessage({ text: '', type: 'info' }), 3000);
     };
 
-    const handleCreateUser = (e: React.FormEvent) => {
+    const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
-        const user: User = {
-            id: `user-${Date.now()}`,
-            ...newUser,
-            active: true,
-        };
-        setAllUsers([...allUsers, user]);
-        setShowCreateForm(false);
-        setNewUser({ name: '', email: '', phone: '', role: Role.Rider, pin: '' });
-        showToast(`Successfully created account for ${user.name}`, 'success');
+        // Manual creation usually happens via the Register screen, 
+        // but if Super Admin creates one, we'd need to handle Auth too.
+        // For simplicity, we mostly manage existing accounts here.
+        alert("Employee registration should be done via the standard enrollment portal for security compliance. Use this terminal for profile management only.");
     };
 
-    const handleApprove = (userId: string) => {
-        setAllUsers(allUsers.map(u => u.id === userId ? { ...u, active: true } : u));
-        showToast('Account approved and activated.', 'success');
+    const handleApprove = async (userId: string) => {
+        try {
+            // PERSIST TO FIRESTORE
+            await updateData('users', userId, { active: true });
+            showToast('Account approved and activated globally.', 'success');
+        } catch (error) {
+            showToast('Cloud sync failed during approval.', 'error');
+        }
     };
 
-    const handleReject = (userId: string) => {
-        setAllUsers(allUsers.filter(u => u.id !== userId));
-        showToast('Application rejected and deleted.', 'info');
+    const handleReject = async (userId: string) => {
+        if (window.confirm('Are you sure you want to permanently delete this application?')) {
+            try {
+                // Remove from Firestore
+                await deleteDoc(doc(db, 'users', userId));
+                showToast('Application rejected and deleted from registry.', 'info');
+            } catch (error) {
+                showToast('Error deleting application.', 'error');
+            }
+        }
     };
 
     const clearRecovery = (recId: string) => {
@@ -48,24 +57,38 @@ const ManageStaff: React.FC = () => {
         showToast('Recovery alert cleared.', 'info');
     };
 
-    const handleRemoveUser = (userId: string) => {
+    const handleRemoveUser = async (userId: string) => {
         if (userId === currentUser?.id) {
             showToast('Self-termination protocol restricted.', 'error');
             return;
         }
         if (window.confirm('Are you sure you want to permanently remove this user from the registry?')) {
-            setAllUsers(allUsers.filter(u => u.id !== userId));
-            showToast('User successfully removed from system.', 'info');
+            try {
+                await deleteDoc(doc(db, 'users', userId));
+                showToast('User successfully removed from system.', 'info');
+            } catch (error) {
+                showToast('Error removing user.', 'error');
+            }
         }
     };
 
-    const handleRoleChange = (userId: string, newRole: Role) => {
-        setAllUsers(allUsers.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    const handleRoleChange = async (userId: string, newRole: Role) => {
+        try {
+            await updateData('users', userId, { role: newRole });
+            showToast(`Role updated to ${newRole}.`, 'success');
+        } catch (error) {
+            showToast('Failed to update role in cloud.', 'error');
+        }
     };
 
-    const handlePinUpdate = (userId: string, newPin: string) => {
-        if (newPin.length > 4) return;
-        setAllUsers(allUsers.map(u => u.id === userId ? { ...u, pin: newPin } : u));
+    const handlePinUpdate = async (userId: string, newPin: string) => {
+        if (newPin.length !== 4) return;
+        try {
+            await updateData('users', userId, { pin: newPin });
+            showToast('Secure PIN updated.', 'success');
+        } catch (error) {
+            showToast('Failed to update PIN in cloud.', 'error');
+        }
     };
 
     return (
@@ -158,25 +181,10 @@ const ManageStaff: React.FC = () => {
                             onClick={() => setShowCreateForm(!showCreateForm)}
                             className="bg-slate-900 dark:bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 dark:hover:bg-indigo-500 transition-all shadow-lg dark:shadow-indigo-500/20"
                         >
-                            {showCreateForm ? 'Cancel Registration' : 'Register New Employee'}
+                            {showCreateForm ? 'Cancel Registry Access' : 'Register New Employee'}
                         </button>
                     )}
                 </div>
-
-                {showCreateForm && (
-                    <form onSubmit={handleCreateUser} className="bg-slate-50 dark:bg-slate-950 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 mb-8 grid grid-cols-1 md:grid-cols-5 gap-4 animate-in slide-in-from-top-4 duration-300">
-                        <input type="text" placeholder="Full Name" required value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className="staff-input" />
-                        <input type="email" placeholder="Email" required value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} className="staff-input" />
-                        <input type="tel" placeholder="Phone" required value={newUser.phone} onChange={e => setNewUser({...newUser, phone: e.target.value})} className="staff-input" />
-                        <input type="password" placeholder="PIN (4 digits)" required maxLength={4} value={newUser.pin} onChange={e => setNewUser({...newUser, pin: e.target.value.replace(/\D/g, '')})} className="staff-input" />
-                        <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as Role})} className="staff-input">
-                            {Object.values(Role).map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                        <div className="md:col-span-5">
-                            <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20">Create Secure Account</button>
-                        </div>
-                    </form>
-                )}
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
@@ -213,9 +221,9 @@ const ManageStaff: React.FC = () => {
                                         {isSuperAdmin ? (
                                             <input 
                                                 type="text" 
-                                                value={user.pin || ''} 
+                                                defaultValue={user.pin || ''} 
                                                 maxLength={4}
-                                                onChange={(e) => handlePinUpdate(user.id, e.target.value.replace(/\D/g, ''))}
+                                                onBlur={(e) => handlePinUpdate(user.id, e.target.value.replace(/\D/g, ''))}
                                                 className="w-16 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-center font-mono font-bold text-slate-700 dark:text-slate-300 rounded-lg py-1 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                                             />
                                         ) : (
