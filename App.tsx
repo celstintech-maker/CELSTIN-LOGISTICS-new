@@ -9,7 +9,7 @@ import Dashboard from './components/Dashboard';
 import CustomerView from './components/CustomerView';
 import ChatWidget from './components/ChatWidget';
 import { db, auth, syncCollection, onAuthStateChanged, signOut, updateData, setProfileData } from './firebase';
-import { doc, onSnapshot, query, collection, where, orderBy, limit } from 'firebase/firestore';
+import { doc, onSnapshot, query, collection, where, orderBy, limit, deleteDoc } from 'firebase/firestore';
 
 export interface ChatMessage {
   id: string;
@@ -132,19 +132,24 @@ const App: React.FC = () => {
     }
   };
 
-  // MAINTENANCE: Reactivate specific requested accounts
+  // MAINTENANCE: Hard delete specific requested accounts to allow re-registration
   useEffect(() => {
     if (allUsers.length === 0) return;
     
     const targets = ['emejorudoka@gmail.com', 'emejorudoka10@gmail.com'];
-    const archivedTargets = allUsers.filter(u => 
-      u.email && targets.includes(u.email.toLowerCase()) && u.isDeleted
+    const usersToDelete = allUsers.filter(u => 
+      u.email && targets.includes(u.email.toLowerCase())
     );
 
-    if (archivedTargets.length > 0) {
-      console.log(`Logistics Terminal: Reactivating ${archivedTargets.length} requested accounts...`);
-      archivedTargets.forEach(user => {
-        handleRestoreUser(user.id).catch(err => console.error(`Failed to reactivate ${user.email}`, err));
+    if (usersToDelete.length > 0) {
+      console.log(`Logistics Terminal: Wiping ${usersToDelete.length} accounts for fresh re-enrollment...`);
+      usersToDelete.forEach(async (user) => {
+        try {
+          await deleteDoc(doc(db, "users", user.id));
+          console.log(`Successfully purged: ${user.email}`);
+        } catch (err) {
+          console.error(`Failed to purge ${user.email}`, err);
+        }
       });
     }
   }, [allUsers]);
