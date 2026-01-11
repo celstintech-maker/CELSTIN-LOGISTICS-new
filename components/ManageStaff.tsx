@@ -50,11 +50,11 @@ const ManageStaff: React.FC = () => {
         }
     };
 
-    const handleRiderUpdate = async (userId: string, updates: Partial<User>) => {
+    const handleUserUpdate = async (userId: string, updates: Partial<User>) => {
         setIsUpdating(userId);
         try {
             await updateData('users', userId, updates);
-            showToast('Rider telemetry updated.', 'success');
+            showToast('User registry updated.', 'success');
         } catch (error) {
             showToast('Sync failed.', 'error');
         } finally {
@@ -129,9 +129,21 @@ const ManageStaff: React.FC = () => {
                                     <div className="text-[10px] text-slate-400 font-mono">{user.email || user.phone}</div>
                                 </td>
                                 <td className="px-6 py-4">
-                                    <span className="font-bold text-indigo-600 dark:text-indigo-400 text-[11px] uppercase tracking-tighter bg-indigo-50 dark:bg-indigo-500/10 px-2 py-1 rounded border border-indigo-100 dark:border-indigo-500/20">
-                                        {user.role}
-                                    </span>
+                                    {isSuperAdmin && user.id !== currentUser?.id ? (
+                                        <select 
+                                            value={user.role}
+                                            onChange={(e) => handleUserUpdate(user.id, { role: e.target.value as Role })}
+                                            className="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-[11px] uppercase tracking-tighter px-2 py-1.5 rounded border border-indigo-100 dark:border-indigo-500/20 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            {Object.values(Role).map(role => (
+                                                <option key={role} value={role}>{role}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <span className="font-bold text-indigo-600 dark:text-indigo-400 text-[11px] uppercase tracking-tighter bg-indigo-50 dark:bg-indigo-500/10 px-2 py-1 rounded border border-indigo-100 dark:border-indigo-500/20">
+                                            {user.role}
+                                        </span>
+                                    )}
                                 </td>
                                 <td className="px-6 py-4">
                                     {user.role === Role.Rider ? (
@@ -141,21 +153,21 @@ const ManageStaff: React.FC = () => {
                                                     type="text" 
                                                     placeholder="Vehicle: e.g. Motorcycle" 
                                                     defaultValue={user.vehicle}
-                                                    onBlur={(e) => handleRiderUpdate(user.id, { vehicle: e.target.value })}
+                                                    onBlur={(e) => handleUserUpdate(user.id, { vehicle: e.target.value })}
                                                     className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg text-[10px] border border-slate-200 dark:border-slate-700 flex-1 outline-none focus:border-indigo-500 transition-colors"
                                                 />
                                                 <input 
                                                     type="text" 
                                                     placeholder="License details" 
                                                     defaultValue={user.licenseDetails}
-                                                    onBlur={(e) => handleRiderUpdate(user.id, { licenseDetails: e.target.value })}
+                                                    onBlur={(e) => handleUserUpdate(user.id, { licenseDetails: e.target.value })}
                                                     className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg text-[10px] border border-slate-200 dark:border-slate-700 flex-1 outline-none focus:border-indigo-500 transition-colors"
                                                 />
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <select 
                                                     defaultValue={user.riderStatus || 'Offline'}
-                                                    onChange={(e) => handleRiderUpdate(user.id, { riderStatus: e.target.value as RiderStatus })}
+                                                    onChange={(e) => handleUserUpdate(user.id, { riderStatus: e.target.value as RiderStatus })}
                                                     className={`p-2 rounded-lg text-[10px] font-bold border-none outline-none cursor-pointer flex-grow ${getRiderStatusColor(user.riderStatus)}`}
                                                 >
                                                     <option value="Available">Available</option>
