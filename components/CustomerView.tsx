@@ -3,12 +3,14 @@ import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../App';
 import { Delivery, DeliveryStatus, PaymentStatus } from '../types';
 import Modal from './Modal';
-import { pushData } from '../firebase';
+import { pushData, db } from '../firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 const CustomerView: React.FC = () => {
     const { systemSettings } = useContext(AppContext);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [lastDeliveryId, setLastDeliveryId] = useState<string | null>(null);
+    const [liveDelivery, setLiveDelivery] = useState<Delivery | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     const [origin, setOrigin] = useState('');
@@ -25,6 +27,17 @@ const CustomerView: React.FC = () => {
             setPricePreview(1500);
         }
     }, [origin, destination, systemSettings.pricePerKm]);
+
+    // Track the live status of the last placed delivery
+    useEffect(() => {
+        if (!lastDeliveryId) return;
+        const unsub = onSnapshot(doc(db, "deliveries", lastDeliveryId), (snap) => {
+            if (snap.exists()) {
+                setLiveDelivery({ id: snap.id, ...snap.data() } as Delivery);
+            }
+        });
+        return () => unsub();
+    }, [lastDeliveryId]);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -50,7 +63,7 @@ const CustomerView: React.FC = () => {
 
         try {
             const firebaseId = await pushData('deliveries', newDelivery);
-            setLastDeliveryId(firebaseId || 'pending');
+            setLastDeliveryId(firebaseId);
             setShowPaymentModal(true);
             form.reset();
             setOrigin('');
@@ -138,23 +151,55 @@ const CustomerView: React.FC = () => {
 
             {showPaymentModal && (
                 <Modal onClose={() => setShowPaymentModal(false)}>
-                    <div className="text-center">
+                    <div className="text-center max-w-sm mx-auto">
                         <div className="w-16 h-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 font-outfit uppercase">Order Received!</h3>
-                        <p className="text-slate-500 dark:text-slate-400 mb-6 text-sm leading-relaxed">Please pay ₦{pricePreview.toLocaleString()} to start your delivery.</p>
-                        <div className="bg-slate-50 dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 text-left space-y-4">
+                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 font-outfit uppercase">Order Logged!</h3>
+                        
+                        {liveDelivery?.rider ? (
+                          <div className="mt-4 p-5 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 animate-in zoom-in-95 duration-500">
+                             <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-3">Live Rider Assigned</p>
+                             <div className="flex items-center gap-4 text-left">
+                                <div className="w-14 h-14 rounded-full bg-white border-2 border-indigo-500 overflow-hidden shadow-lg">
+                                  {liveDelivery.rider.profilePicture ? (
+                                    <img src={liveDelivery.rider.profilePicture} className="w-full h-full object-cover" alt="Rider" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                   <p className="font-bold text-slate-900 dark:text-white leading-tight">{liveDelivery.rider.name}</p>
+                                   <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Verified Professional</p>
+                                   <a href={`tel:${liveDelivery.rider.phone}`} className="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-black text-xs mt-1 hover:underline">
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                                      Call {liveDelivery.rider.phone}
+                                   </a>
+                                </div>
+                             </div>
+                          </div>
+                        ) : (
+                          <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-3 justify-center">
+                            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Searching for nearby riders...</p>
+                          </div>
+                        )}
+
+                        <p className="text-slate-500 dark:text-slate-400 my-6 text-sm leading-relaxed px-4">Transfer ₦{pricePreview.toLocaleString()} to activate your delivery command.</p>
+                        
+                        <div className="bg-slate-50 dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 text-left space-y-4 shadow-inner">
                             <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Account Name</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Vault Title</p>
                                 <p className="text-slate-900 dark:text-slate-100 font-bold">{systemSettings.paymentAccountName}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Account Number</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Vault Index (Account #)</p>
                                 <p className="text-indigo-600 dark:text-indigo-400 font-mono text-xl font-black">{systemSettings.paymentAccountNumber}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Bank Name</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Settlement Bank</p>
                                 <p className="text-slate-900 dark:text-slate-100 font-bold">{systemSettings.paymentBank}</p>
                             </div>
                         </div>
@@ -172,7 +217,7 @@ const CustomerView: React.FC = () => {
                     color: #1e293b;
                     outline: none;
                     transition: all 0.2s;
-                    font-weight: 500;
+                    font-weight: 600;
                 }
                 .dark .customer-input { background: rgba(15, 23, 42, 0.5); border: 1px solid #1e293b; color: white; }
                 .customer-input:focus { border-color: #6366f1; background: white; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }

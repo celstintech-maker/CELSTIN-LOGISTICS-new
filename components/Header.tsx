@@ -57,8 +57,12 @@ const Header: React.FC = () => {
                 <span className={`text-[11px] font-bold uppercase tracking-tighter mt-1 ${systemSettings.primaryColor === 'indigo' ? 'text-indigo-500' : 'text-emerald-500'}`}>{currentUser.role}</span>
               </div>
               <div className="relative group">
-                <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center border border-slate-200 dark:border-slate-700 hover:border-indigo-400 transition-colors">
-                    <UserCircleIcon className="w-6 h-6 text-slate-500 dark:text-slate-400" />
+                <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center border border-slate-200 dark:border-slate-700 hover:border-indigo-400 transition-colors overflow-hidden">
+                    {currentUser.profilePicture ? (
+                      <img src={currentUser.profilePicture} alt="User" className="w-full h-full object-cover" />
+                    ) : (
+                      <UserCircleIcon className="w-6 h-6 text-slate-500 dark:text-slate-400" />
+                    )}
                 </div>
               </div>
               <button

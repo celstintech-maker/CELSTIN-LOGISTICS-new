@@ -53,7 +53,12 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
 
         try {
             await updateData('deliveries', deliveryId, { 
-                rider: { id: rider.id, name: rider.name, phone: rider.phone },
+                rider: { 
+                  id: rider.id, 
+                  name: rider.name, 
+                  phone: rider.phone,
+                  profilePicture: rider.profilePicture || ''
+                },
                 status: DeliveryStatus.Assigned
             });
 
@@ -83,7 +88,6 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
     const calculateCommission = (price: number) => {
         const rate = currentUser?.commissionRate ?? systemSettings.standardCommissionRate ?? 0.1;
         const amount = price * rate;
-        // Limit to 2500 per user request
         return Math.min(amount, 2500);
     };
 
@@ -121,7 +125,31 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
                                         <button onClick={() => setSelectedCustomer(d.customer)} className="text-blue-600 dark:text-blue-400 font-bold hover:underline text-left">
                                             {d.customer.name}
                                         </button>
-                                        <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 uppercase tracking-tighter">Rider: {d.rider?.name || 'Unassigned'}</span>
+                                        <div className="flex items-center gap-3 mt-2">
+                                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden flex-shrink-0">
+                                                {d.rider?.profilePicture ? (
+                                                  <img src={d.rider.profilePicture} className="w-full h-full object-cover" alt="Rider" />
+                                                ) : (
+                                                  <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                                    <UserCircleIcon className="w-4 h-4" />
+                                                  </div>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col">
+                                              <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-tighter">
+                                                {d.rider?.name || 'Waiting for Rider'}
+                                              </span>
+                                              {d.rider?.phone && (
+                                                <a 
+                                                    href={`tel:${d.rider.phone}`}
+                                                    className="inline-flex items-center gap-1.5 text-[9px] font-black text-indigo-600 dark:text-indigo-400 mt-0.5 hover:underline uppercase tracking-widest"
+                                                >
+                                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                                                    Call {d.rider.phone}
+                                                </a>
+                                              )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">

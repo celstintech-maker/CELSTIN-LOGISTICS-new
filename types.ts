@@ -52,6 +52,7 @@ export interface User {
   riderStatus?: RiderStatus;
   active?: boolean;
   location?: Location;
+  profilePicture?: string;
 }
 
 export interface PayoutNotification {
