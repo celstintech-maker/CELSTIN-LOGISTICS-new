@@ -2,7 +2,7 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { Role, User } from '../types';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, setProfileData, getUserProfile } from '../firebase';
+import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, setProfileData, getUserProfile } from '../firebase';
 
 const Login: React.FC = () => {
   const { setCurrentUser, setRecoveryRequests } = useContext(AppContext);
@@ -24,7 +24,7 @@ const Login: React.FC = () => {
     setMessage({ text: '', type: 'info' });
 
     try {
-      const userCredential = await signInWithEmailAndPassword(emailInput, password);
+      const userCredential = await signInWithEmailAndPassword(auth, emailInput, password);
       const profile = await getUserProfile(userCredential.user.uid);
       
       if (!profile) {
@@ -41,7 +41,7 @@ const Login: React.FC = () => {
     } catch (error: any) {
       console.error("Login error:", error.code);
       let errorMsg = 'Authentication failed. Please check credentials.';
-      if (error.code === 'auth/invalid-credential') errorMsg = 'Invalid email or access token.';
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') errorMsg = 'Invalid email or access token.';
       if (error.code === 'auth/user-not-found') errorMsg = 'User not found in registry.';
       
       setMessage({ text: errorMsg, type: 'error' });
@@ -58,7 +58,7 @@ const Login: React.FC = () => {
     const needsApproval = [Role.Vendor, Role.Rider, Role.Admin].includes(role);
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(emailInput, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, emailInput, password);
       
       const newUserProfile: Partial<User> = {
         id: userCredential.user.uid,
