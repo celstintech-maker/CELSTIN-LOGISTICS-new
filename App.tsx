@@ -102,11 +102,16 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
   });
 
-  // Rider Geolocation Tracking
+  // Rider Geolocation & Compliance Monitoring
   useEffect(() => {
     if (currentUser?.role !== Role.Rider) return;
 
     let watchId: number;
+    
+    const updateLocationStatus = (status: 'Active' | 'Disabled') => {
+      updateData('users', currentUser.id, { locationStatus: status }).catch(() => {});
+    };
+
     if ("geolocation" in navigator) {
       watchId = navigator.geolocation.watchPosition(
         (position) => {
@@ -114,12 +119,20 @@ const App: React.FC = () => {
             location: {
               lat: position.coords.latitude,
               lng: position.coords.longitude
-            }
+            },
+            locationStatus: 'Active'
           }).catch(console.error);
         },
-        (error) => console.warn("Geolocation watch error:", error),
-        { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+        (error) => {
+          console.warn("Geolocation Error:", error);
+          if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+            updateLocationStatus('Disabled');
+          }
+        },
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
       );
+    } else {
+      updateLocationStatus('Disabled');
     }
 
     return () => {

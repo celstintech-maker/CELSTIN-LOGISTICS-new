@@ -1,7 +1,7 @@
 
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { AppContext } from '../App';
-import { Role, Delivery } from '../types';
+import { Role, Delivery, RiderStatus } from '../types';
 import { CogIcon, TruckIcon, UserCircleIcon, MapIcon, ChartBarIcon } from './icons';
 import DeliveriesTable from './DeliveriesTable';
 import CreateDelivery from './CreateDelivery';
@@ -10,11 +10,18 @@ import Settings from './Settings';
 import MapView from './MapView';
 import VendorFinancials from './VendorFinancials';
 import UserProfile from './UserProfile';
+import { updateData } from '../firebase';
 
 const Dashboard: React.FC = () => {
   const { currentUser, deliveries, allUsers, setAllUsers } = useContext(AppContext);
   const [activeTab, setActiveTab] = useState('deliveries');
   const [selectedOrderForNav, setSelectedOrderForNav] = useState<Delivery | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const userDeliveries = deliveries.filter(d => {
     if (currentUser?.role === Role.SuperAdmin || currentUser?.role === Role.Admin) return true;
@@ -29,6 +36,27 @@ const Dashboard: React.FC = () => {
   const handleLocateOrder = (delivery: Delivery) => {
     setSelectedOrderForNav(delivery);
     setActiveTab('map');
+  };
+
+  const canCloseShift = () => {
+    const hours = currentTime.getHours();
+    return hours >= 19; // 7 PM
+  };
+
+  const handleToggleAvailability = async () => {
+    if (!currentUser) return;
+    const newStatus: RiderStatus = currentUser.riderStatus === 'Available' ? 'Offline' : 'Available';
+    
+    if (newStatus === 'Offline' && !canCloseShift()) {
+        alert("Operational Policy: Shifts can only be closed after 7:00 PM. Please stay available for dispatch until then.");
+        return;
+    }
+
+    try {
+        await updateData('users', currentUser.id, { riderStatus: newStatus });
+    } catch (e) {
+        alert("Failed to sync availability status.");
+    }
   };
 
   const settleVendor = (vendorId: string) => {
@@ -160,6 +188,30 @@ const Dashboard: React.FC = () => {
               </button>
             ))}
           </nav>
+          
+          {currentUser?.role === Role.Rider && (
+              <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between mb-3 px-2">
+                      <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Shift Status</span>
+                      <span className={`w-2 h-2 rounded-full ${currentUser.riderStatus === 'Available' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                  </div>
+                  <button 
+                    onClick={handleToggleAvailability}
+                    className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+                        currentUser.riderStatus === 'Available' 
+                        ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white' 
+                        : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20'
+                    }`}
+                  >
+                    {currentUser.riderStatus === 'Available' ? 'Go Offline' : 'Go Available'}
+                  </button>
+                  {!canCloseShift() && currentUser.riderStatus === 'Available' && (
+                      <p className="mt-2 text-[8px] text-center text-slate-400 font-bold uppercase tracking-tighter leading-tight">
+                        Locked until 19:00 (7 PM)
+                      </p>
+                  )}
+              </div>
+          )}
         </div>
       </aside>
 

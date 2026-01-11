@@ -1,7 +1,7 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../App';
-import { Delivery, DeliveryStatus, PaymentStatus, Role } from '../types';
+import { Delivery, DeliveryStatus, PaymentStatus, Role, VehicleMode } from '../types';
 import { pushData } from '../firebase';
 
 const CreateDelivery: React.FC = () => {
@@ -10,19 +10,29 @@ const CreateDelivery: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     const [estimatedPrice, setEstimatedPrice] = useState<number>(1500);
+    const [estimatedMinutes, setEstimatedMinutes] = useState<number>(0);
     const [origin, setOrigin] = useState('');
     const [destination, setDestination] = useState('');
+    const [transportMode, setTransportMode] = useState<VehicleMode>('Bike');
 
     useEffect(() => {
         if (origin.trim() && destination.trim()) {
             const seed = (origin.trim().length + destination.trim().length) % 15;
             const estimatedKm = 5 + seed;
+            
+            // Calculate price
             const price = Math.max(1500, estimatedKm * systemSettings.pricePerKm);
             setEstimatedPrice(price);
+
+            // Calculate estimated delivery time (minutes)
+            // Bike: 2.5 min/km | Truck: 4 min/km | Public: 6 min/km
+            const modeMultiplier = transportMode === 'Bike' ? 2.5 : transportMode === 'Truck' ? 4 : 6;
+            setEstimatedMinutes(Math.round(estimatedKm * modeMultiplier));
         } else {
             setEstimatedPrice(1500);
+            setEstimatedMinutes(0);
         }
-    }, [origin, destination, systemSettings.pricePerKm]);
+    }, [origin, destination, transportMode, systemSettings.pricePerKm]);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -42,6 +52,8 @@ const CreateDelivery: React.FC = () => {
             status: DeliveryStatus.Pending,
             paymentStatus: PaymentStatus.Unpaid,
             price: Number(estimatedPrice),
+            estimatedMinutes,
+            transportMode,
             vendorId: currentUser?.role === Role.Vendor ? currentUser.id : 'staff-direct',
             creatorRole: currentUser?.role || 'System',
             creatorName: currentUser?.name || 'Terminal',
@@ -104,9 +116,30 @@ const CreateDelivery: React.FC = () => {
 
                 <div className="md:col-span-2 flex items-center gap-3 mt-4">
                     <div className="h-px flex-grow bg-slate-100 dark:bg-slate-800"></div>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Address Details</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Logistics Intelligence</span>
                     <div className="h-px flex-grow bg-slate-100 dark:bg-slate-800"></div>
                 </div>
+
+                <div className="md:col-span-2">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">Transport Mode</label>
+                    <div className="grid grid-cols-3 gap-3">
+                        {(['Bike', 'Truck', 'Public Transport'] as VehicleMode[]).map(mode => (
+                            <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setTransportMode(mode)}
+                                className={`py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${
+                                    transportMode === mode 
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
+                                    : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-400'
+                                }`}
+                            >
+                                {mode}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 <div>
                     <label htmlFor="pickupAddress" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Pickup Address</label>
                     <input 
@@ -135,14 +168,14 @@ const CreateDelivery: React.FC = () => {
                 </div>
                  <div className="md:col-span-2">
                     <label htmlFor="packageNotes" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Item Description</label>
-                    <textarea name="packageNotes" id="packageNotes" rows={3} className="form-input-v2" placeholder="What are we delivering? (e.g. Food, clothes, documents)"></textarea>
+                    <textarea name="packageNotes" id="packageNotes" rows={3} className="form-input-v2" placeholder="What are we delivering?"></textarea>
                 </div>
 
                 <div className="md:col-span-2 flex flex-col sm:flex-row justify-between items-center gap-6 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
                     <div className="flex gap-8">
                         <div className="text-center sm:text-left">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Price per KM</p>
-                            <p className="text-lg font-black text-slate-600 dark:text-slate-400">₦{systemSettings.pricePerKm}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Travel Time</p>
+                            <p className="text-lg font-black text-slate-600 dark:text-slate-400">~{estimatedMinutes} MINS</p>
                         </div>
                         <div className="text-center sm:text-left">
                             <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">Estimated Total</p>

@@ -25,6 +25,8 @@ export enum PaymentStatus {
   Paid = 'Paid',
 }
 
+export type VehicleMode = 'Bike' | 'Truck' | 'Public Transport';
+
 export interface BankDetails {
   bankName: string;
   accountNumber: string;
@@ -52,6 +54,7 @@ export interface User {
   riderStatus?: RiderStatus;
   active?: boolean;
   location?: Location;
+  locationStatus?: 'Active' | 'Disabled';
   profilePicture?: string;
 }
 
@@ -79,6 +82,8 @@ export interface Delivery {
   status: DeliveryStatus;
   paymentStatus: PaymentStatus;
   price: number;
+  estimatedMinutes?: number;
+  transportMode?: VehicleMode;
   createdAt: any; 
 }
 

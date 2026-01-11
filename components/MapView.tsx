@@ -82,10 +82,20 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
 
       snapshot.docs.forEach(doc => {
         const rider = { id: doc.id, ...doc.data() } as User;
-        if (!rider.location) return;
+        if (!rider.location && rider.locationStatus !== 'Disabled') return;
 
         activeIds.add(rider.id);
         ridersList.push(rider);
+        
+        // Skip map marker if location is disabled, but keep in list
+        if (rider.locationStatus === 'Disabled' || !rider.location) {
+            if (markersMapRef.current.has(rider.id)) {
+                markersMapRef.current.get(rider.id).remove();
+                markersMapRef.current.delete(rider.id);
+            }
+            return;
+        }
+
         const position: [number, number] = [rider.location.lat, rider.location.lng];
 
         if (markersMapRef.current.has(rider.id)) {
@@ -133,6 +143,10 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
   }, []);
 
   const focusRider = (rider: User) => {
+    if (rider.locationStatus === 'Disabled') {
+        alert(`${rider.name} has disabled GPS tracking. Command cannot snap to their coordinate.`);
+        return;
+    }
     if (mapRef.current && rider.location) {
       mapRef.current.flyTo([rider.location.lat, rider.location.lng], 16, { duration: 1.5 });
       markersMapRef.current.get(rider.id)?.openPopup();
@@ -172,9 +186,13 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
                 <button 
                   key={rider.id}
                   onClick={() => focusRider(rider)}
-                  className="w-full text-left p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-indigo-500/50 bg-slate-50/50 dark:bg-slate-950/30 transition-all flex items-center gap-3 group"
+                  className={`w-full text-left p-3 rounded-xl border transition-all flex items-center gap-3 group ${
+                      rider.locationStatus === 'Disabled' 
+                      ? 'bg-rose-50/30 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40' 
+                      : 'border-slate-100 dark:border-slate-800 hover:border-indigo-500/50 bg-slate-50/50 dark:bg-slate-950/30'
+                  }`}
                 >
-                  <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 overflow-hidden group-hover:border-indigo-500 transition-colors">
+                  <div className={`w-10 h-10 rounded-full bg-white dark:bg-slate-800 border-2 overflow-hidden transition-colors ${rider.locationStatus === 'Disabled' ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'}`}>
                     {rider.profilePicture ? (
                       <img src={rider.profilePicture} className="w-full h-full object-cover" />
                     ) : (
@@ -184,9 +202,14 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
                     )}
                   </div>
                   <div className="flex-grow min-w-0">
-                    <p className="font-bold text-slate-900 dark:text-white text-xs truncate">{rider.name}</p>
+                    <div className="flex items-center gap-2">
+                        <p className="font-bold text-slate-900 dark:text-white text-xs truncate">{rider.name}</p>
+                        {rider.locationStatus === 'Disabled' && (
+                            <span className="text-[8px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded uppercase tracking-widest">OFFLINE GPS</span>
+                        )}
+                    </div>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${rider.riderStatus === 'On Delivery' ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${rider.riderStatus === 'On Delivery' ? 'bg-amber-500' : rider.riderStatus === 'Available' ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
                         <span className="text-[9px] font-bold text-slate-500 uppercase">{rider.riderStatus || 'Idle'}</span>
                     </div>
                   </div>
