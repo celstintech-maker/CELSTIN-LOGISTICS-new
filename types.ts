@@ -40,9 +40,9 @@ export interface User {
   email?: string;
   pin?: string;
   bankDetails?: BankDetails;
-  commissionBalance?: number; // Current unpaid earnings
-  totalWithdrawn?: number; // Total history of payouts
-  commissionRate?: number; // Percentage (e.g., 0.1 for 10%)
+  commissionBalance?: number; 
+  totalWithdrawn?: number; 
+  commissionRate?: number; 
   vehicle?: string;
   active?: boolean;
   location?: Location;
@@ -65,7 +65,7 @@ export interface Delivery {
   id: string;
   customer: CustomerInfo;
   rider?: User;
-  vendorId?: string; // Track which vendor this order belongs to
+  vendorId?: string; 
   pickupAddress: string;
   dropoffAddress: string;
   packageNotes: string;
@@ -92,5 +92,6 @@ export interface SystemSettings {
     paymentBank: string;
     footerText: string;
     theme: 'light' | 'dark';
-    standardCommissionRate: number; // Global default commission
+    standardCommissionRate: number;
+    pricePerKm: number; // Added for Super Admin control
 }

@@ -5,7 +5,7 @@ import { Delivery, DeliveryStatus, PaymentStatus, Role } from '../types';
 import { pushData } from '../firebase';
 
 const CreateDelivery: React.FC = () => {
-    const { currentUser } = useContext(AppContext);
+    const { currentUser, systemSettings } = useContext(AppContext);
     const [isExpanded, setIsExpanded] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -14,6 +14,10 @@ const CreateDelivery: React.FC = () => {
         setIsSubmitting(true);
         const formData = new FormData(e.currentTarget);
         
+        // Base distance simulation (can be replaced by Google Maps API later)
+        const estimatedKm = 5 + Math.floor(Math.random() * 15);
+        const price = Math.max(1500, estimatedKm * systemSettings.pricePerKm);
+
         const newDelivery: Partial<Delivery> = {
             customer: {
                 id: `cust-${Date.now()}`,
@@ -25,7 +29,7 @@ const CreateDelivery: React.FC = () => {
             packageNotes: formData.get('packageNotes') as string,
             status: DeliveryStatus.Pending,
             paymentStatus: PaymentStatus.Unpaid,
-            price: 1500 + Math.floor(Math.random() * 10) * 150,
+            price: price,
             vendorId: currentUser?.role === Role.Vendor ? currentUser.id : undefined,
         };
 
@@ -99,17 +103,15 @@ const CreateDelivery: React.FC = () => {
 
                 <div className="md:col-span-2 flex flex-col sm:flex-row justify-between items-center gap-6 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
                     <div className="text-center sm:text-left">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Estimated Value</p>
-                        <p className="text-2xl font-black text-slate-900 dark:text-white">₦1,850.00</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Base Calculation Rate</p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white">₦{systemSettings.pricePerKm}/KM</p>
                     </div>
                     <button 
                         type="submit" 
                         disabled={isSubmitting}
                         className={`w-full sm:w-auto bg-emerald-600 text-white font-black py-4 px-12 rounded-2xl hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-500/20 uppercase tracking-[0.2em] text-xs flex items-center justify-center gap-3 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                        {isSubmitting ? (
-                            <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                        ) : 'Transmit Data'}
+                        Transmit Data
                     </button>
                 </div>
             </form>
@@ -126,15 +128,8 @@ const CreateDelivery: React.FC = () => {
                     outline: none;
                     transition: all 0.2s;
                 }
-                .dark .form-input-v2 {
-                    background: #020617;
-                    border-color: #1e293b;
-                    color: white;
-                }
-                .form-input-v2:focus {
-                    border-color: #6366f1;
-                    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
-                }
+                .dark .form-input-v2 { background: #020617; border-color: #1e293b; color: white; }
+                .form-input-v2:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }
             `}</style>
         </div>
     );

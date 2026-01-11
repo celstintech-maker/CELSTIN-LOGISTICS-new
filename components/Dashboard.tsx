@@ -11,17 +11,27 @@ import MapView from './MapView';
 import VendorFinancials from './VendorFinancials';
 
 const Dashboard: React.FC = () => {
-  const { currentUser, setCurrentUser, deliveries, allUsers, setAllUsers, broadcastToCloud, syncFromCloud } = useContext(AppContext);
+  const { currentUser, setCurrentUser, deliveries, allUsers, setAllUsers, syncFromCloud } = useContext(AppContext);
   const [activeTab, setActiveTab] = useState('deliveries');
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Filter deliveries based on role for a "Clean" experience
+  const userDeliveries = deliveries.filter(d => {
+    if (currentUser?.role === Role.SuperAdmin || currentUser?.role === Role.Admin) return true;
+    if (currentUser?.role === Role.Rider) return d.rider?.id === currentUser.id;
+    if (currentUser?.role === Role.Vendor) return d.vendorId === currentUser.id;
+    if (currentUser?.role === Role.Customer) return d.customer.phone === currentUser.phone;
+    return false;
+  });
+
+  const hasActivity = userDeliveries.length > 0;
+
   const handleCloudSync = async () => {
     setIsSyncing(true);
-    // Simulate cloud latency
     await new Promise(r => setTimeout(r, 1500));
     await syncFromCloud();
     setIsSyncing(false);
-    alert("Fleet Registry Synchronized with Cloud. All device registrations updated.");
+    alert("Fleet Registry Synchronized with Cloud.");
   };
 
   const settleVendor = (vendorId: string) => {
@@ -29,10 +39,7 @@ const Dashboard: React.FC = () => {
     if (!vendor) return;
     
     const balance = vendor.commissionBalance || 0;
-    if (balance <= 0) {
-      alert("This merchant has no pending accruals for settlement.");
-      return;
-    }
+    if (balance <= 0) return;
 
     if (window.confirm(`Initiate vault transfer of ₦${balance.toLocaleString()} to ${vendor.name}?`)) {
       const updatedUsers = allUsers.map(u => {
@@ -45,16 +52,7 @@ const Dashboard: React.FC = () => {
         }
         return u;
       });
-
       setAllUsers(updatedUsers);
-
-      if (currentUser?.id === vendorId) {
-        setCurrentUser({
-          ...currentUser,
-          totalWithdrawn: (currentUser.totalWithdrawn || 0) + balance,
-          commissionBalance: 0
-        });
-      }
     }
   };
 
@@ -67,48 +65,49 @@ const Dashboard: React.FC = () => {
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center gap-4 transition-colors">
                     <div className="p-3 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl"><TruckIcon /></div>
                     <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total Deliveries</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{deliveries.length}</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Your Deliveries</p>
+                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{userDeliveries.length}</p>
                     </div>
                 </div>
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center gap-4 transition-colors">
                     <div className="p-3 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl"><ChartBarIcon /></div>
                     <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Active Tasks</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{deliveries.filter(d => d.status !== 'Delivered').length}</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Pending Tasks</p>
+                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{userDeliveries.filter(d => d.status !== 'Delivered').length}</p>
                     </div>
                 </div>
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center gap-4 transition-colors">
                     <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl"><UserCircleIcon /></div>
                     <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Completed</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{deliveries.filter(d => d.status === 'Delivered').length}</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Success Rate</p>
+                        <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                          {userDeliveries.length > 0 ? Math.round((userDeliveries.filter(d => d.status === 'Delivered').length / userDeliveries.length) * 100) : 0}%
+                        </p>
                     </div>
                 </div>
             </div>
 
-            {currentUser?.role === Role.SuperAdmin && (
-               <div className="bg-slate-800/40 border border-slate-700 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
-                  <div>
-                    <h3 className="text-white font-bold font-outfit uppercase text-sm tracking-wider">Cloud Sync Terminal</h3>
-                    <p className="text-slate-400 text-xs mt-1">Pull data from users who registered on other devices into this terminal.</p>
-                  </div>
-                  <button 
-                    onClick={handleCloudSync}
-                    disabled={isSyncing}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all flex items-center gap-2"
-                  >
-                    <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    {isSyncing ? 'Accessing Neural Link...' : 'Sync All Devices'}
-                  </button>
-               </div>
-            )}
-
             {[Role.SuperAdmin, Role.Admin, Role.Rider, Role.Vendor].includes(currentUser!.role) && <CreateDelivery />}
-            <DeliveriesTable title="Live Queue" deliveries={deliveries.filter(d => d.status !== 'Delivered' && d.status !== 'Failed')} />
-            <DeliveriesTable title="Archive" deliveries={deliveries.filter(d => d.status === 'Delivered' || d.status === 'Failed')} />
+
+            {!hasActivity ? (
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-dashed border-slate-200 dark:border-slate-800 transition-all">
+                <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300 dark:text-slate-700">
+                  <TruckIcon className="w-10 h-10" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white font-outfit uppercase">System Clean & Ready</h3>
+                <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-2 text-sm">
+                  Welcome to your terminal, <span className="font-bold text-indigo-500">{currentUser?.name}</span>. Your dispatch history is currently empty. Start your first delivery to see real-time logistics analytics.
+                </p>
+                {currentUser?.role === Role.Customer && (
+                   <p className="mt-8 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Awaiting your first request</p>
+                )}
+              </div>
+            ) : (
+              <>
+                <DeliveriesTable title="Live Queue" deliveries={userDeliveries.filter(d => d.status !== 'Delivered' && d.status !== 'Failed')} />
+                <DeliveriesTable title="Archive" deliveries={userDeliveries.filter(d => d.status === 'Delivered' || d.status === 'Failed')} />
+              </>
+            )}
           </div>
         );
       case 'map':
@@ -138,9 +137,6 @@ const Dashboard: React.FC = () => {
     <div className="flex flex-col lg:flex-row gap-8">
       <aside className="lg:w-64 flex-shrink-0">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 sticky top-24 transition-colors">
-           <div className="mb-6 hidden lg:block">
-              <h3 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-4">Navigation</h3>
-           </div>
            <nav className="space-y-1.5">
             {availableTabs.map(tab => (
               <button
@@ -148,8 +144,8 @@ const Dashboard: React.FC = () => {
                 onClick={() => setActiveTab(tab.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 ${
                   activeTab === tab.id
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 translate-x-1'
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400'
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 translate-x-1'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400'
                 }`}
               >
                 {tab.icon}
@@ -162,8 +158,8 @@ const Dashboard: React.FC = () => {
 
       <div className="flex-grow min-w-0">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Main Dashboard</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">Managing logistics for <span className="font-bold text-slate-700 dark:text-slate-300">{currentUser?.name}</span> as <span className="text-blue-600 dark:text-blue-400 font-bold">{currentUser?.role}</span></p>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight font-outfit uppercase">Logistics Command</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">Welcome back, <span className="font-bold text-slate-700 dark:text-slate-300">{currentUser?.name}</span> • <span className="text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest text-[10px]">{currentUser?.role}</span></p>
         </div>
         {renderContent()}
       </div>

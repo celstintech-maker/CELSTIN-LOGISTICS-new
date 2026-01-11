@@ -9,6 +9,7 @@ import Dashboard from './components/Dashboard';
 import CustomerView from './components/CustomerView';
 import ChatWidget from './components/ChatWidget';
 import { db, auth, syncCollection, onAuthStateChanged, getUserProfile, signOut } from './firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 export interface ChatMessage {
   id: string;
@@ -25,6 +26,20 @@ export interface RecoveryRequest {
   phone: string;
   timestamp: Date;
 }
+
+const DEFAULT_SETTINGS: SystemSettings = {
+  businessName: 'CLESTIN LOGISTICS',
+  businessAddress: '123 Logistics Way, Asaba, Delta State',
+  logoUrl: '',
+  primaryColor: 'indigo',
+  paymentAccountName: 'Celstine Logistics',
+  paymentAccountNumber: '9022786275',
+  paymentBank: 'Moniepoint MFB',
+  footerText: '© 2024 CLESTIN LOGISTICS. Premium Delivery Intelligence.',
+  theme: 'dark',
+  standardCommissionRate: 0.1,
+  pricePerKm: 150 // New default
+};
 
 export const AppContext = React.createContext<{
   currentUser: User | null;
@@ -56,18 +71,7 @@ export const AppContext = React.createContext<{
   setAllUsers: () => {},
   vendorPerformance: [],
   setVendorPerformance: () => {},
-  systemSettings: {
-    businessName: 'CLESTIN LOGISTICS',
-    businessAddress: '123 Logistics Way, Asaba, Delta State',
-    logoUrl: '',
-    primaryColor: 'indigo',
-    paymentAccountName: 'Celstine Logistics',
-    paymentAccountNumber: '9022786275',
-    paymentBank: 'Moniepoint MFB',
-    footerText: '© 2024 CLESTIN LOGISTICS. Premium Delivery Intelligence.',
-    theme: 'dark',
-    standardCommissionRate: 0.1
-  },
+  systemSettings: DEFAULT_SETTINGS,
   setSystemSettings: () => {},
   chatHistory: [],
   setChatHistory: () => {},
@@ -81,8 +85,8 @@ export const AppContext = React.createContext<{
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [deliveries, setDeliveries] = useState<Delivery[]>(MOCK_DELIVERIES);
-  const [allUsers, setAllUsers] = useState<User[]>(MOCK_USERS);
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [recoveryRequests, setRecoveryRequests] = useState<RecoveryRequest[]>([]);
   const [vendorPerformance, setVendorPerformance] = useState<VendorPerformance[]>(MOCK_VENDORS_PERFORMANCE);
@@ -91,18 +95,7 @@ const App: React.FC = () => {
   
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
     const saved = localStorage.getItem('clestin_settings');
-    return saved ? JSON.parse(saved) : {
-      businessName: 'CLESTIN LOGISTICS',
-      businessAddress: '123 Logistics Way, Asaba, Delta State',
-      logoUrl: '',
-      primaryColor: 'indigo',
-      paymentAccountName: 'Celstine Logistics',
-      paymentAccountNumber: '9022786275',
-      paymentBank: 'Moniepoint MFB',
-      footerText: '© 2024 CLESTIN LOGISTICS. Premium Delivery Intelligence.',
-      theme: 'dark',
-      standardCommissionRate: 0.1
-    };
+    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
   });
 
   // FIREBASE AUTH LISTENER
@@ -111,13 +104,29 @@ const App: React.FC = () => {
       if (firebaseUser) {
         const profile = await getUserProfile(firebaseUser.uid);
         if (profile) {
-          setCurrentUser(profile as User);
+          // Double check approval status on login
+          if (profile.active !== false) {
+             setCurrentUser(profile as User);
+          } else {
+             await signOut(auth);
+             setCurrentUser(null);
+          }
         }
       } else {
         setCurrentUser(null);
       }
     });
     return () => unsubscribe();
+  }, []);
+
+  // REAL-TIME SETTINGS SYNC
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "settings", "global"), (doc) => {
+      if (doc.exists()) {
+        setSystemSettings(doc.data() as SystemSettings);
+      }
+    });
+    return () => unsub();
   }, []);
 
   // REAL-TIME FIREBASE SYNC
@@ -129,7 +138,7 @@ const App: React.FC = () => {
 
     const unsubscribeUsers = syncCollection('users', 
       (data) => {
-        if (data.length > 0) setAllUsers(data as User[]);
+        setAllUsers(data as User[]);
         setIsCloudConnected(true);
         setCloudError(null);
       },
@@ -138,7 +147,7 @@ const App: React.FC = () => {
 
     const unsubscribeDeliveries = syncCollection('deliveries', 
       (data) => {
-        if (data.length > 0) setDeliveries(data as Delivery[]);
+        setDeliveries(data as Delivery[]);
         setIsCloudConnected(true);
         setCloudError(null);
       },

@@ -1,7 +1,8 @@
+
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { Role, User } from '../types';
-import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, setProfileData, getUserProfile } from '../firebase';
+import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, setProfileData, getUserProfile, signOut } from '../firebase';
 
 const Login: React.FC = () => {
   const { setCurrentUser, setRecoveryRequests } = useContext(AppContext);
@@ -27,22 +28,21 @@ const Login: React.FC = () => {
       const profile = await getUserProfile(userCredential.user.uid);
       
       if (!profile) {
-        setMessage({ text: 'Access Error: Identity profile missing from registry. Please Enroll first.', type: 'error' });
+        setMessage({ text: 'Access Error: Identity profile missing.', type: 'error' });
         return;
       }
 
-      if ((profile as any).active === false) {
-        setMessage({ text: 'Access Denied: Terminal approval still pending.', type: 'error' });
+      // STRICT APPROVAL CHECK
+      if (profile.active === false) {
+        setMessage({ text: 'ACCESS DENIED: Your enrollment is still awaiting Super Admin verification.', type: 'error' });
+        await signOut(auth);
         return;
       }
 
       setCurrentUser(profile as User);
     } catch (error: any) {
-      console.error("Login error:", error.code);
       let errorMsg = 'Authentication failed. Please check credentials.';
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') errorMsg = 'Invalid email or access token.';
-      if (error.code === 'auth/user-not-found') errorMsg = 'User not found in registry.';
-      
+      if (error.code === 'auth/invalid-credential') errorMsg = 'Invalid email or access token.';
       setMessage({ text: errorMsg, type: 'error' });
     } finally {
       setIsLoading(false);
@@ -54,10 +54,8 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setMessage({ text: '', type: 'info' });
 
-    // Special check for super admin email to bypass manual approval if desired, 
-    // or just leave as is for consistent flow.
+    // support@celstin.com gets automatic SuperAdmin approval
     const isSuperAdminEmail = emailInput.toLowerCase() === 'support@celstin.com';
-    const needsApproval = [Role.Vendor, Role.Rider, Role.Admin].includes(role) && !isSuperAdminEmail;
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, emailInput, password);
@@ -68,7 +66,7 @@ const Login: React.FC = () => {
         phone,
         email: emailInput,
         role: isSuperAdminEmail ? Role.SuperAdmin : role,
-        active: !needsApproval,
+        active: isSuperAdminEmail, // ONLY SuperAdmin email is auto-active
         commissionBalance: 0,
         totalWithdrawn: 0,
         commissionRate: 0.1
@@ -76,8 +74,9 @@ const Login: React.FC = () => {
 
       await setProfileData(userCredential.user.uid, newUserProfile);
       
-      if (needsApproval) {
-        setMessage({ text: 'Enrollment successful. Terminal admin must verify your account before login.', type: 'success' });
+      if (!isSuperAdminEmail) {
+        setMessage({ text: 'ENROLLMENT LOGGED: You must wait for a Super Admin to approve your terminal access.', type: 'success' });
+        await signOut(auth);
         setView('login');
       } else {
         setCurrentUser(newUserProfile as User);
@@ -85,9 +84,7 @@ const Login: React.FC = () => {
     } catch (error: any) {
       console.error("Registration error:", error);
       let errorMsg = 'Registration failed.';
-      if (error.code === 'auth/email-already-in-use') errorMsg = 'Email already indexed in our registry.';
-      if (error.code === 'auth/weak-password') errorMsg = 'Access token is too simple (min 6 chars).';
-      
+      if (error.code === 'auth/email-already-in-use') errorMsg = 'Email already indexed.';
       setMessage({ text: errorMsg, type: 'error' });
     } finally {
       setIsLoading(false);
@@ -181,35 +178,9 @@ const Login: React.FC = () => {
             <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="form-input-dark" disabled={isLoading} placeholder="Min 6 characters" />
           </div>
           <button type="submit" className="btn-primary-dark mt-4 flex items-center justify-center gap-2" disabled={isLoading}>
-            {isLoading ? (
-              <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            ) : 'Confirm Enrollment'}
+            Confirm Enrollment
           </button>
           <button type="button" onClick={() => setView('login')} className="w-full text-[10px] font-bold text-slate-500 uppercase tracking-widest py-2" disabled={isLoading}>Return to Login</button>
-        </form>
-      )}
-
-      {view === 'forgot' && (
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          setRecoveryRequests(prev => [...prev, { id: `rec-${Date.now()}`, name, phone, timestamp: new Date() }]);
-          setMessage({ text: 'Recovery signal transmitted. Admin will contact you.', type: 'success' });
-          setView('login');
-        }} className="space-y-4">
-          <p className="text-slate-400 text-[10px] font-medium leading-relaxed mb-4 italic">Providing your registered name and phone will alert a Super Admin to investigate and verify your secure reset.</p>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Registered Name</label>
-            <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="form-input-dark" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Registered Phone</label>
-            <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} className="form-input-dark" />
-          </div>
-          <button type="submit" className="btn-primary-dark mt-4">Request Recovery</button>
-          <button type="button" onClick={() => setView('login')} className="w-full text-[10px] font-bold text-slate-500 uppercase tracking-widest py-2">Back to Login</button>
         </form>
       )}
 
@@ -226,7 +197,6 @@ const Login: React.FC = () => {
           font-size: 0.875rem;
         }
         .form-input-dark:focus { border-color: #6366f1; background: #020617; }
-        .form-input-dark:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-primary-dark {
           width: 100%;
           background: #6366f1;
@@ -239,8 +209,7 @@ const Login: React.FC = () => {
           transition: all 0.3s;
           box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);
         }
-        .btn-primary-dark:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); box-shadow: 0 20px 25px -5px rgba(99, 102, 241, 0.4); }
-        .btn-primary-dark:disabled { background: #334155; opacity: 0.7; cursor: not-allowed; }
+        .btn-primary-dark:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
       `}</style>
     </div>
   );
