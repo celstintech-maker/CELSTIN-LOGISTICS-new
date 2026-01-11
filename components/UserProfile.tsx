@@ -1,12 +1,11 @@
 
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { AppContext } from '../App';
-import { setProfileData, updateData } from '../firebase';
 import { NIGERIAN_BANKS } from '../constants';
 import { Role } from '../types';
 
 const UserProfile: React.FC = () => {
-  const { currentUser, setCurrentUser, systemSettings } = useContext(AppContext);
+  const { currentUser, handleUpdateUser } = useContext(AppContext);
   const [isEditing, setIsEditing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -38,7 +37,7 @@ const UserProfile: React.FC = () => {
     if (!currentUser) return;
     setIsSaving(true);
     try {
-      const updatedProfile = {
+      const updates = {
         name: formData.name,
         phone: formData.phone,
         profilePicture: formData.profilePicture,
@@ -49,11 +48,7 @@ const UserProfile: React.FC = () => {
         }
       };
       
-      // Save directly to Firestore 'users' collection
-      await setProfileData(currentUser.id, updatedProfile);
-      
-      // Local state update
-      setCurrentUser(prev => prev ? { ...prev, ...updatedProfile } : null);
+      await handleUpdateUser(currentUser.id, updates);
       setIsEditing(false);
     } catch (e) {
       console.error(e);
@@ -66,7 +61,6 @@ const UserProfile: React.FC = () => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // 1MB limit for performance
       if (file.size > 1.2 * 1024 * 1024) { 
         alert("File too large. Please select an image under 1MB.");
         return;
@@ -99,7 +93,6 @@ const UserProfile: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Identity & Photo Section */}
           <div className="space-y-6 md:col-span-1">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Security Visual</h3>
             <div className="flex flex-col items-center">
@@ -132,30 +125,17 @@ const UserProfile: React.FC = () => {
             </div>
           </div>
 
-          {/* Details Section */}
           <div className="md:col-span-2 space-y-8">
             <div className="space-y-6">
                 <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Identity Details</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Authenticated Name</label>
-                    <input 
-                    type="text" 
-                    disabled={!isEditing}
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="profile-input"
-                    />
+                    <input type="text" disabled={!isEditing} value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="profile-input" />
                 </div>
                 <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Comms Link (Phone)</label>
-                    <input 
-                    type="tel" 
-                    disabled={!isEditing}
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="profile-input"
-                    />
+                    <input type="tel" disabled={!isEditing} value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="profile-input" />
                 </div>
                 </div>
             </div>
@@ -165,74 +145,29 @@ const UserProfile: React.FC = () => {
                 <div className="space-y-4">
                 <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Settlement Bank</label>
-                    <select 
-                    disabled={!isEditing}
-                    value={formData.bankName}
-                    onChange={(e) => setFormData({...formData, bankName: e.target.value})}
-                    className="profile-input appearance-none"
-                    >
-                    <option value="">Select Bank</option>
-                    {NIGERIAN_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                    <select disabled={!isEditing} value={formData.bankName} onChange={(e) => setFormData({...formData, bankName: e.target.value})} className="profile-input appearance-none">
+                      <option value="">Select Bank</option>
+                      {NIGERIAN_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
                     </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Vault Index (Account #)</label>
-                    <input 
-                        type="text" 
-                        disabled={!isEditing}
-                        value={formData.accountNumber}
-                        onChange={(e) => setFormData({...formData, accountNumber: e.target.value})}
-                        className="profile-input font-mono"
-                    />
+                    <input type="text" disabled={!isEditing} value={formData.accountNumber} onChange={(e) => setFormData({...formData, accountNumber: e.target.value})} className="profile-input font-mono" />
                     </div>
                     <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Vault Title (Account Name)</label>
-                    <input 
-                        type="text" 
-                        disabled={!isEditing}
-                        value={formData.accountName}
-                        onChange={(e) => setFormData({...formData, accountName: e.target.value})}
-                        className="profile-input"
-                    />
+                    <input type="text" disabled={!isEditing} value={formData.accountName} onChange={(e) => setFormData({...formData, accountName: e.target.value})} className="profile-input" />
                     </div>
                 </div>
                 </div>
             </div>
           </div>
         </div>
-
-        <div className="mt-12 p-6 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
-           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 mb-4">Official Payment Reference</h3>
-           <p className="text-xs text-slate-500 mb-4">Transfer all payments to the company vault below for manual verification.</p>
-           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              <div>
-                <p className="text-[9px] font-bold text-slate-400 uppercase">Bank</p>
-                <p className="font-bold text-slate-900 dark:text-white">{systemSettings.paymentBank}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-bold text-slate-400 uppercase">Vault Index</p>
-                <p className="font-bold text-indigo-600 dark:text-indigo-400 font-mono text-lg">{systemSettings.paymentAccountNumber}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-bold text-slate-400 uppercase">Vault Title</p>
-                <p className="font-bold text-slate-900 dark:text-white uppercase">{systemSettings.paymentAccountName}</p>
-              </div>
-           </div>
-        </div>
       </div>
       <style>{`
         .profile-input {
-          width: 100%;
-          padding: 0.875rem 1.25rem;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 1rem;
-          color: #1e293b;
-          font-size: 0.875rem;
-          font-weight: 600;
-          outline: none;
-          transition: all 0.2s;
+          width: 100%; padding: 0.875rem 1.25rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 1rem; color: #1e293b; font-size: 0.875rem; font-weight: 600; outline: none; transition: all 0.2s;
         }
         .dark .profile-input { background: #020617; border-color: #1e293b; color: white; }
         .profile-input:focus:not(:disabled) { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }

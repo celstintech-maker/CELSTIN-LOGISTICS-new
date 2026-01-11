@@ -8,7 +8,7 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import CustomerView from './components/CustomerView';
 import ChatWidget from './components/ChatWidget';
-import { db, auth, syncCollection, onAuthStateChanged, signOut, updateData } from './firebase';
+import { db, auth, syncCollection, onAuthStateChanged, signOut, updateData, setProfileData } from './firebase';
 import { doc, onSnapshot, query, collection, where, orderBy, limit } from 'firebase/firestore';
 
 export interface ChatMessage {
@@ -64,6 +64,11 @@ export const AppContext = React.createContext<{
   syncFromCloud: () => Promise<void>;
   isCloudConnected: boolean;
   cloudError: string | null;
+  // User Management Actions
+  handleApproveUser: (userId: string) => Promise<void>;
+  handleArchiveUser: (userId: string) => Promise<void>;
+  handleRestoreUser: (userId: string) => Promise<void>;
+  handleUpdateUser: (userId: string, updates: Partial<User>) => Promise<void>;
 }>({
   currentUser: null,
   setCurrentUser: () => {},
@@ -83,7 +88,11 @@ export const AppContext = React.createContext<{
   broadcastToCloud: async () => {},
   syncFromCloud: async () => {},
   isCloudConnected: true,
-  cloudError: null
+  cloudError: null,
+  handleApproveUser: async () => {},
+  handleArchiveUser: async () => {},
+  handleRestoreUser: async () => {},
+  handleUpdateUser: async () => {},
 });
 
 const App: React.FC = () => {
@@ -101,6 +110,28 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('clestin_settings');
     return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
   });
+
+  // Centralized User Management Handlers
+  const handleApproveUser = async (userId: string) => {
+    await updateData('users', userId, { active: true, isDeleted: false, riderStatus: 'Offline' });
+  };
+
+  const handleArchiveUser = async (userId: string) => {
+    await updateData('users', userId, { isDeleted: true, active: false });
+  };
+
+  const handleRestoreUser = async (userId: string) => {
+    await updateData('users', userId, { isDeleted: false, active: true });
+  };
+
+  const handleUpdateUser = async (userId: string, updates: Partial<User>) => {
+    // Determine if we should use setDoc (for deep profile updates) or updateDoc
+    if (updates.bankDetails || updates.profilePicture) {
+      await setProfileData(userId, updates);
+    } else {
+      await updateData('users', userId, updates);
+    }
+  };
 
   // Rider Geolocation & Compliance Monitoring
   useEffect(() => {
@@ -280,7 +311,11 @@ const App: React.FC = () => {
     broadcastToCloud: async () => {},
     syncFromCloud: async () => {},
     isCloudConnected,
-    cloudError
+    cloudError,
+    handleApproveUser,
+    handleArchiveUser,
+    handleRestoreUser,
+    handleUpdateUser
   }), [currentUser, deliveries, allUsers, vendorPerformance, systemSettings, chatHistory, recoveryRequests, isCloudConnected, cloudError]);
 
   return (

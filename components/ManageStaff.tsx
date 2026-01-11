@@ -2,10 +2,9 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { User, Role, RiderStatus } from '../types';
-import { updateData } from '../firebase';
 
 const ManageStaff: React.FC = () => {
-    const { allUsers, currentUser } = useContext(AppContext);
+    const { allUsers, currentUser, handleApproveUser, handleArchiveUser, handleRestoreUser, handleUpdateUser } = useContext(AppContext);
     const [actionMessage, setActionMessage] = useState({ text: '', type: 'info' });
     const [isUpdating, setIsUpdating] = useState<string | null>(null);
     const [showDeleted, setShowDeleted] = useState(false);
@@ -18,7 +17,6 @@ const ManageStaff: React.FC = () => {
     const activeUsers = allUsers.filter(u => u.active === true && u.isDeleted !== true);
     const deletedUsers = allUsers.filter(u => u.isDeleted === true);
     
-    // Filtered deleted users for search (specifically targeting the email mentioned)
     const filteredDeleted = deletedUsers.filter(u => 
         u.email?.toLowerCase().includes(deleteSearch.toLowerCase()) || 
         u.name.toLowerCase().includes(deleteSearch.toLowerCase()) ||
@@ -30,62 +28,13 @@ const ManageStaff: React.FC = () => {
         setTimeout(() => setActionMessage({ text: '', type: 'info' }), 4000);
     };
 
-    const handleApprove = async (userId: string) => {
+    const wrapAction = async (userId: string, action: () => Promise<void>, successMsg: string) => {
         setIsUpdating(userId);
         try {
-            await updateData('users', userId, { 
-                active: true,
-                isDeleted: false,
-                riderStatus: 'Offline' 
-            });
-            showToast('Account verified successfully.', 'success');
+            await action();
+            showToast(successMsg, 'success');
         } catch (error) {
-            showToast('Update failed.', 'error');
-        } finally {
-            setIsUpdating(null);
-        }
-    };
-
-    const handleSoftDelete = async (userId: string) => {
-        if (window.confirm('Archive User: This will deactivate the account and move it to the Recycle Bin. Continue?')) {
-            setIsUpdating(userId);
-            try {
-                await updateData('users', userId, { 
-                    isDeleted: true,
-                    active: false 
-                });
-                showToast('User moved to Recycle Bin.', 'info');
-            } catch (error) {
-                showToast('Archive operation failed.', 'error');
-            } finally {
-                setIsUpdating(null);
-            }
-        }
-    };
-
-    const handleRestore = async (userId: string) => {
-        setIsUpdating(userId);
-        try {
-            // Restoration must reset both active status and isDeleted flag
-            await updateData('users', userId, { 
-                isDeleted: false, 
-                active: true 
-            });
-            showToast('User account successfully restored to registry.', 'success');
-        } catch (error) {
-            showToast('Restoration failed.', 'error');
-        } finally {
-            setIsUpdating(null);
-        }
-    };
-
-    const handleUserUpdate = async (userId: string, updates: Partial<User>) => {
-        setIsUpdating(userId);
-        try {
-            await updateData('users', userId, updates);
-            showToast('User registry updated.', 'success');
-        } catch (error) {
-            showToast('Sync failed.', 'error');
+            showToast('Registry sync failed.', 'error');
         } finally {
             setIsUpdating(null);
         }
@@ -175,18 +124,11 @@ const ManageStaff: React.FC = () => {
                                         </div>
                                         <p className="text-[10px] text-slate-400 mt-2 font-mono truncate bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded border border-slate-100 dark:border-slate-800">{u.email || u.phone}</p>
                                         <button 
-                                            onClick={() => handleRestore(u.id)} 
+                                            onClick={() => wrapAction(u.id, () => handleRestoreUser(u.id), 'Identity successfully restored.')} 
                                             disabled={isUpdating === u.id}
                                             className="w-full mt-6 bg-indigo-600 text-white text-[10px] font-black py-3.5 rounded-xl hover:bg-indigo-500 transition-all uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/20 active:scale-95 flex items-center justify-center gap-2"
                                         >
-                                            {isUpdating === u.id ? (
-                                                <>
-                                                    <svg className="animate-spin h-3 w-3 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                                    Syncing...
-                                                </>
-                                            ) : (
-                                                'Restore Identity'
-                                            )}
+                                            {isUpdating === u.id ? 'Syncing...' : 'Restore Identity'}
                                         </button>
                                     </div>
                                 </div>
@@ -211,8 +153,8 @@ const ManageStaff: React.FC = () => {
                                         <p className="text-[10px] text-slate-500 uppercase font-black mt-1 tracking-widest">{u.role}</p>
                                         <p className="text-[10px] text-slate-400 mt-2 font-mono truncate">{u.email || u.phone}</p>
                                         <div className="flex gap-2 mt-6">
-                                            <button onClick={() => handleApprove(u.id)} disabled={isUpdating === u.id} className="flex-1 bg-emerald-600 text-white text-[10px] font-black py-3 rounded-xl hover:bg-emerald-500 transition-colors uppercase tracking-widest">Verify</button>
-                                            <button onClick={() => handleSoftDelete(u.id)} disabled={isUpdating === u.id} className="flex-1 bg-white dark:bg-slate-800 text-rose-600 border border-rose-100 dark:border-rose-900/50 text-[10px] font-black py-3 rounded-xl hover:bg-rose-50 transition-colors uppercase tracking-widest">Reject</button>
+                                            <button onClick={() => wrapAction(u.id, () => handleApproveUser(u.id), 'Account verified.')} disabled={isUpdating === u.id} className="flex-1 bg-emerald-600 text-white text-[10px] font-black py-3 rounded-xl hover:bg-emerald-500 transition-colors uppercase tracking-widest">Verify</button>
+                                            <button onClick={() => wrapAction(u.id, () => handleArchiveUser(u.id), 'Access rejected.')} disabled={isUpdating === u.id} className="flex-1 bg-white dark:bg-slate-800 text-rose-600 border border-rose-100 dark:border-rose-900/50 text-[10px] font-black py-3 rounded-xl hover:bg-rose-50 transition-colors uppercase tracking-widest">Reject</button>
                                         </div>
                                     </div>
                                 ))}
@@ -243,7 +185,7 @@ const ManageStaff: React.FC = () => {
                                             {isSuperAdmin && user.id !== currentUser?.id ? (
                                                 <select 
                                                     value={user.role}
-                                                    onChange={(e) => handleUserUpdate(user.id, { role: e.target.value as Role })}
+                                                    onChange={(e) => wrapAction(user.id, () => handleUpdateUser(user.id, { role: e.target.value as Role }), 'Role updated.')}
                                                     className="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-[11px] uppercase tracking-tighter px-2 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-500/20 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500"
                                                 >
                                                     {Object.values(Role).map(role => (
@@ -264,21 +206,21 @@ const ManageStaff: React.FC = () => {
                                                             type="text" 
                                                             placeholder="Vehicle" 
                                                             defaultValue={user.vehicle}
-                                                            onBlur={(e) => handleUserUpdate(user.id, { vehicle: e.target.value })}
+                                                            onBlur={(e) => wrapAction(user.id, () => handleUpdateUser(user.id, { vehicle: e.target.value }), 'Vehicle sync.')}
                                                             className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg text-[10px] border border-slate-200 dark:border-slate-700 flex-1 outline-none focus:border-indigo-500 transition-colors"
                                                         />
                                                         <input 
                                                             type="text" 
                                                             placeholder="License" 
                                                             defaultValue={user.licenseDetails}
-                                                            onBlur={(e) => handleUserUpdate(user.id, { licenseDetails: e.target.value })}
+                                                            onBlur={(e) => wrapAction(user.id, () => handleUpdateUser(user.id, { licenseDetails: e.target.value }), 'License updated.')}
                                                             className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg text-[10px] border border-slate-200 dark:border-slate-700 flex-1 outline-none focus:border-indigo-500 transition-colors"
                                                         />
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <select 
                                                             defaultValue={user.riderStatus || 'Offline'}
-                                                            onChange={(e) => handleUserUpdate(user.id, { riderStatus: e.target.value as RiderStatus })}
+                                                            onChange={(e) => wrapAction(user.id, () => handleUpdateUser(user.id, { riderStatus: e.target.value as RiderStatus }), 'Status shifted.')}
                                                             className={`p-2 rounded-lg text-[10px] font-bold border-none outline-none cursor-pointer flex-grow ${getRiderStatusColor(user.riderStatus)}`}
                                                         >
                                                             <option value="Available">Available</option>
@@ -300,14 +242,15 @@ const ManageStaff: React.FC = () => {
                                         <td className="px-6 py-4 text-right">
                                             {(isSuperAdmin || (currentUser?.role === Role.Admin && user.role !== Role.SuperAdmin)) && user.id !== currentUser?.id && (
                                                 <button 
-                                                    onClick={() => handleSoftDelete(user.id)} 
+                                                    onClick={() => {
+                                                        if (window.confirm('Archive this user?')) {
+                                                            wrapAction(user.id, () => handleArchiveUser(user.id), 'Moved to Bin.');
+                                                        }
+                                                    }} 
                                                     disabled={isUpdating === user.id}
                                                     className="text-rose-500 p-3 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all group"
-                                                    title="Archive User Account"
                                                 >
-                                                    <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
+                                                    <svg className="w-5 h-5 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                 </button>
                                             )}
                                         </td>
