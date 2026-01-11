@@ -125,13 +125,29 @@ const App: React.FC = () => {
   };
 
   const handleUpdateUser = async (userId: string, updates: Partial<User>) => {
-    // Determine if we should use setDoc (for deep profile updates) or updateDoc
     if (updates.bankDetails || updates.profilePicture) {
       await setProfileData(userId, updates);
     } else {
       await updateData('users', userId, updates);
     }
   };
+
+  // MAINTENANCE: Reactivate specific requested accounts
+  useEffect(() => {
+    if (allUsers.length === 0) return;
+    
+    const targets = ['emejorudoka@gmail.com', 'emejorudoka10@gmail.com'];
+    const archivedTargets = allUsers.filter(u => 
+      u.email && targets.includes(u.email.toLowerCase()) && u.isDeleted
+    );
+
+    if (archivedTargets.length > 0) {
+      console.log(`Logistics Terminal: Reactivating ${archivedTargets.length} requested accounts...`);
+      archivedTargets.forEach(user => {
+        handleRestoreUser(user.id).catch(err => console.error(`Failed to reactivate ${user.email}`, err));
+      });
+    }
+  }, [allUsers]);
 
   // Rider Geolocation & Compliance Monitoring
   useEffect(() => {
@@ -185,12 +201,10 @@ const App: React.FC = () => {
         profileUnsubscribe = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
           if (docSnap.exists()) {
             const profile = { id: docSnap.id, ...docSnap.data() } as User;
-            // Only allow active, non-deleted users to stay logged in
             if (profile.active !== false && !profile.isDeleted) {
               setCurrentUser(profile);
             } else {
               setCurrentUser(null);
-              // Explicitly sign out if they were deactivated while logged in
               signOut(auth);
             }
           } else {
