@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, Role, Delivery, VendorPerformance, SystemSettings, DeliveryStatus } from './types';
+import { User, Role, Delivery, VendorPerformance, SystemSettings } from './types';
 import { MOCK_USERS, MOCK_DELIVERIES, MOCK_VENDORS_PERFORMANCE } from './constants';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -7,7 +8,7 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import CustomerView from './components/CustomerView';
 import ChatWidget from './components/ChatWidget';
-import { db, syncCollection, pushData, updateData } from './firebase';
+import { db, auth, syncCollection, onAuthStateChanged, getUserProfile, signOut } from './firebase';
 
 export interface ChatMessage {
   id: string;
@@ -79,11 +80,7 @@ export const AppContext = React.createContext<{
 });
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('clestin_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [deliveries, setDeliveries] = useState<Delivery[]>(MOCK_DELIVERIES);
   const [allUsers, setAllUsers] = useState<User[]>(MOCK_USERS);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -108,16 +105,26 @@ const App: React.FC = () => {
     };
   });
 
+  // FIREBASE AUTH LISTENER
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const profile = await getUserProfile(firebaseUser.uid);
+        if (profile) {
+          setCurrentUser(profile as User);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   // REAL-TIME FIREBASE SYNC
   useEffect(() => {
     const handleSyncError = (err: any) => {
-        if (err.code === 'permission-denied') {
-            setIsCloudConnected(false);
-            setCloudError("Access Denied: Please check your published Firestore rules.");
-        } else if (err.code === 'unavailable') {
-            setIsCloudConnected(false);
-            setCloudError("Cloud sync unavailable. Operating from local cache.");
-        }
+        setIsCloudConnected(false);
+        setCloudError(err.message || "Cloud sync unavailable.");
     };
 
     const unsubscribeUsers = syncCollection('users', 
@@ -144,13 +151,8 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const broadcastToCloud = async () => {
-    console.log("Firebase listeners are managing live data stream.");
-  };
-
-  const syncFromCloud = async () => {
-    console.log("Re-initializing data listeners.");
-  };
+  const broadcastToCloud = async () => {};
+  const syncFromCloud = async () => {};
 
   useEffect(() => {
     localStorage.setItem('clestin_settings', JSON.stringify(systemSettings));
@@ -161,15 +163,10 @@ const App: React.FC = () => {
     }
   }, [systemSettings]);
 
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('clestin_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('clestin_user');
-    }
-  }, [currentUser]);
-
-  const logout = () => setCurrentUser(null);
+  const logout = async () => {
+    await signOut(auth);
+    setCurrentUser(null);
+  };
 
   const contextValue = useMemo(() => ({
     currentUser,

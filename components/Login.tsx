@@ -1,88 +1,85 @@
 
-import React, { useContext, useState, useMemo } from 'react';
+import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { Role, User } from '../types';
-import { pushData } from '../firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, setProfileData, getUserProfile } from '../firebase';
 
 const Login: React.FC = () => {
-  const { setCurrentUser, allUsers, setRecoveryRequests } = useContext(AppContext);
+  const { setCurrentUser, setRecoveryRequests } = useContext(AppContext);
   const [view, setView] = useState<'login' | 'register' | 'forgot'>('login');
   
-  const [identifier, setIdentifier] = useState('');
-  const [pin, setPin] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>(Role.Customer);
   
   const [message, setMessage] = useState({ text: '', type: 'error' });
 
-  const isEmailInput = useMemo(() => {
-    return identifier.includes('@') || identifier.toLowerCase() === 'support@celstin.com';
-  }, [identifier]);
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    let user = allUsers.find(u => u.email?.toLowerCase() === identifier.toLowerCase() && u.role === Role.SuperAdmin);
-    if (!user) {
-        user = allUsers.find(u => u.name.toLowerCase() === identifier.toLowerCase() && u.role !== Role.SuperAdmin);
-    }
+    setIsLoading(true);
+    setMessage({ text: '', type: 'info' });
 
-    if (user) {
-      if (user.pin !== pin) {
-        setMessage({ text: 'Incorrect Security Credentials.', type: 'error' });
+    try {
+      const userCredential = await signInWithEmailAndPassword((e.target as any).email.value, password);
+      const profile = await getUserProfile(userCredential.user.uid);
+      
+      if (!profile) {
+        setMessage({ text: 'Profile record not found in registry.', type: 'error' });
         return;
       }
-      if (user.active === false) {
-        setMessage({ text: 'Neural access pending approval.', type: 'error' });
+
+      if ((profile as any).active === false) {
+        setMessage({ text: 'Access pending terminal approval.', type: 'error' });
         return;
       }
-      setCurrentUser(user);
-    } else {
-      setMessage({ text: 'Identity not verified in registry.', type: 'error' });
+
+      setCurrentUser(profile as User);
+    } catch (error: any) {
+      console.error(error);
+      setMessage({ text: 'Invalid credentials or network failure.', type: 'error' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin.length !== 4 || isNaN(Number(pin))) {
-        setMessage({ text: 'PIN protocol requires 4 digits.', type: 'error' });
-        return;
-    }
-    const nameExists = allUsers.find(u => u.name.toLowerCase() === name.toLowerCase());
-    if (nameExists) {
-      setMessage({ text: 'Name already indexed in fleet.', type: 'error' });
-      return;
-    }
-    
     setIsLoading(true);
+    setMessage({ text: '', type: 'info' });
+
+    const emailValue = (e.target as any).email.value;
     const needsApproval = [Role.Vendor, Role.Rider].includes(role);
-    const newUser: Partial<User> = {
-      name,
-      phone,
-      email,
-      pin,
-      role,
-      active: !needsApproval,
-      commissionBalance: 0,
-      totalWithdrawn: 0,
-      commissionRate: 0.1
-    };
 
     try {
-      // PUSH TO FIREBASE
-      await pushData('users', newUser);
+      const userCredential = await createUserWithEmailAndPassword(emailValue, password);
+      
+      const newUserProfile: Partial<User> = {
+        id: userCredential.user.uid,
+        name,
+        phone,
+        email: emailValue,
+        role,
+        active: !needsApproval,
+        commissionBalance: 0,
+        totalWithdrawn: 0,
+        commissionRate: 0.1
+      };
+
+      await setProfileData(userCredential.user.uid, newUserProfile);
       
       if (needsApproval) {
-        setMessage({ text: 'Application sent for encryption review.', type: 'success' });
+        setMessage({ text: 'Registration successful. Awaiting admin approval.', type: 'success' });
+        setView('login');
       } else {
-        setMessage({ text: 'Access Granted. Authenticate to enter.', type: 'success' });
+        setCurrentUser(newUserProfile as User);
       }
-      setView('login');
-    } catch (error) {
-      setMessage({ text: 'Sync Error: Check internet connection.', type: 'error' });
+    } catch (error: any) {
+      console.error(error);
+      setMessage({ text: error.message.includes('email-already-in-use') ? 'Email already indexed.' : 'Registration failed.', type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -106,10 +103,10 @@ const Login: React.FC = () => {
       
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-white font-outfit uppercase tracking-tight">
-          {view === 'login' ? 'Authentication' : view === 'register' ? 'Node Registration' : 'Access Recovery'}
+          {view === 'login' ? 'Secure Login' : view === 'register' ? 'Enrollment' : 'Recovery'}
         </h2>
         <p className="text-slate-500 mt-3 text-xs font-bold uppercase tracking-widest">
-          {view === 'login' ? 'Enter credentials for terminal access' : view === 'register' ? 'Join the Logistics Collective' : 'Verify ID for PIN retrieval'}
+          {view === 'login' ? 'Terminal authentication required' : view === 'register' ? 'Join the Fleet Network' : 'Verify ID for access restoration'}
         </p>
       </div>
 
@@ -122,14 +119,17 @@ const Login: React.FC = () => {
       {view === 'login' && (
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Terminal ID / Email</label>
-            <input type="text" required placeholder="Name or @celstin.com" value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="form-input-dark" />
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Corporate Email</label>
+            <input name="email" type="email" required placeholder="user@celstin.com" className="form-input-dark" />
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">{isEmailInput ? 'Access Token' : 'Secure PIN'}</label>
-            <input type="password" maxLength={isEmailInput ? 20 : 4} required placeholder={isEmailInput ? "••••••••" : "••••"} value={pin} onChange={(e) => setPin(isEmailInput ? e.target.value : e.target.value.replace(/\D/g, ''))} className="form-input-dark" />
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Access Token</label>
+            <input type="password" required placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="form-input-dark" />
           </div>
-          <button type="submit" className="btn-primary-dark">Verify Identity</button>
+          <button type="submit" disabled={isLoading} className="btn-primary-dark flex items-center justify-center gap-2">
+            {isLoading && <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
+            Authenticate
+          </button>
           <div className="flex justify-between text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-6">
             <button type="button" onClick={() => setView('register')} className="hover:text-indigo-300">Request Access</button>
             <button type="button" onClick={() => setView('forgot')} className="hover:text-indigo-300">Lost Key?</button>
@@ -142,6 +142,10 @@ const Login: React.FC = () => {
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Full Identity Name</label>
             <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="form-input-dark" disabled={isLoading} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Corporate Email</label>
+            <input name="email" type="email" required className="form-input-dark" disabled={isLoading} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -158,8 +162,8 @@ const Login: React.FC = () => {
             </div>
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Security PIN (4 Digits)</label>
-            <input type="password" maxLength={4} required value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} className="form-input-dark" disabled={isLoading} />
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Create Access Token</label>
+            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="form-input-dark" disabled={isLoading} />
           </div>
           <button type="submit" className="btn-primary-dark mt-4 flex items-center justify-center gap-2" disabled={isLoading}>
             {isLoading && (
@@ -168,7 +172,7 @@ const Login: React.FC = () => {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
             )}
-            {isLoading ? 'Syncing...' : 'Confirm Enrollment'}
+            Confirm Enrollment
           </button>
           <button type="button" onClick={() => setView('login')} className="w-full text-[10px] font-bold text-slate-500 uppercase tracking-widest py-2" disabled={isLoading}>Return to Login</button>
         </form>
@@ -176,7 +180,7 @@ const Login: React.FC = () => {
 
       {view === 'forgot' && (
         <form onSubmit={handleRecoveryRequest} className="space-y-4">
-          <p className="text-slate-400 text-[10px] font-medium leading-relaxed mb-4 italic">Providing your registered name and phone will alert a Super Admin to investigate and verify your secure PIN reset.</p>
+          <p className="text-slate-400 text-[10px] font-medium leading-relaxed mb-4 italic">Providing your registered name and phone will alert a Super Admin to investigate and verify your secure reset.</p>
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Registered Name</label>
             <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="form-input-dark" />
@@ -216,8 +220,8 @@ const Login: React.FC = () => {
           transition: all 0.3s;
           box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);
         }
-        .btn-primary-dark:hover { background: #4f46e5; transform: translateY(-1px); box-shadow: 0 20px 25px -5px rgba(99, 102, 241, 0.4); }
-        .btn-primary-dark:disabled { background: #334155; box-shadow: none; cursor: not-allowed; transform: none; }
+        .btn-primary-dark:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); box-shadow: 0 20px 25px -5px rgba(99, 102, 241, 0.4); }
+        .btn-primary-dark:disabled { background: #334155; opacity: 0.7; cursor: not-allowed; }
       `}</style>
     </div>
   );

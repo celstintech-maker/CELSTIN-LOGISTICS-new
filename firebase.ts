@@ -1,3 +1,4 @@
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { 
   getFirestore, 
@@ -8,10 +9,18 @@ import {
   onSnapshot, 
   updateDoc, 
   query, 
-  orderBy,
+  where,
+  getDoc,
   serverTimestamp,
   enableIndexedDbPersistence
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDR5ItO2VcxLxcxqp8bmKVQ4QOBhakFZ6g",
@@ -25,6 +34,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+export const auth = getAuth(app);
 
 // Attempt to enable offline persistence
 enableIndexedDbPersistence(db).catch((err) => {
@@ -35,6 +45,17 @@ enableIndexedDbPersistence(db).catch((err) => {
     }
 });
 
+export { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged };
+
+export const getUserProfile = async (uid: string) => {
+  const docRef = doc(db, "users", uid);
+  const docSnap = await getDoc(docRef);
+  if (docSnap.exists()) {
+    return { id: docSnap.id, ...docSnap.data() };
+  }
+  return null;
+};
+
 export const syncCollection = (collectionName: string, callback: (data: any[]) => void, onError?: (err: any) => void) => {
   const q = query(collection(db, collectionName));
   return onSnapshot(q, (snapshot) => {
@@ -42,13 +63,6 @@ export const syncCollection = (collectionName: string, callback: (data: any[]) =
     callback(data);
   }, (error: any) => {
     console.error(`[Firebase] Error syncing ${collectionName}:`, error.message);
-    
-    if (error.code === 'permission-denied') {
-        console.warn("%c FIREBASE PERMISSION DENIED: You must update your Security Rules to 'allow read, write: if true;' at https://console.firebase.google.com/project/cels-logistics/firestore/rules", "color: white; background: #e11d48; font-weight: bold; padding: 4px; border-radius: 4px;");
-    } else if (error.code === 'not-found' || error.message?.includes('database (default) does not exist')) {
-        console.warn("%c DATABASE MISSING: Initialize Firestore at https://console.firebase.google.com/project/cels-logistics/firestore", "color: white; background: #f59e0b; font-weight: bold; padding: 4px; border-radius: 4px;");
-    }
-    
     if (onError) onError(error);
   });
 };
@@ -62,12 +76,18 @@ export const pushData = async (collectionName: string, data: any) => {
     return docRef.id;
   } catch (e: any) {
     console.error("Error adding document: ", e);
-    if (e.code === 'permission-denied') {
-        throw new Error("Access Denied: Please update Firestore Security Rules to allow writes.");
-    }
-    if (e.code === 'not-found' || e.message?.includes('not-found')) {
-        throw new Error("Cloud Registry Offline: The database has not been initialized.");
-    }
+    throw e;
+  }
+};
+
+export const setProfileData = async (uid: string, data: any) => {
+  try {
+    await setDoc(doc(db, "users", uid), {
+      ...data,
+      createdAt: serverTimestamp()
+    });
+  } catch (e: any) {
+    console.error("Error setting profile: ", e);
     throw e;
   }
 };
