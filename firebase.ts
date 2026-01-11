@@ -102,7 +102,7 @@ export const setProfileData = async (uid: string, data: any) => {
 
 export const updateData = async (collectionName: string, id: string, data: any) => {
   try {
-    const docRef = doc(collectionName, id);
+    const docRef = doc(db, collectionName, id);
     await updateDoc(docRef, {
       ...data,
       updatedAt: serverTimestamp()
