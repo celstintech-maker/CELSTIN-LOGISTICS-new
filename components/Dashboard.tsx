@@ -1,6 +1,7 @@
+
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
-import { Role } from '../types';
+import { Role, Delivery } from '../types';
 import { CogIcon, TruckIcon, UserCircleIcon, MapIcon, ChartBarIcon } from './icons';
 import DeliveriesTable from './DeliveriesTable';
 import CreateDelivery from './CreateDelivery';
@@ -11,9 +12,9 @@ import VendorFinancials from './VendorFinancials';
 import UserProfile from './UserProfile';
 
 const Dashboard: React.FC = () => {
-  const { currentUser, deliveries, allUsers, setAllUsers, syncFromCloud } = useContext(AppContext);
+  const { currentUser, deliveries, allUsers, setAllUsers } = useContext(AppContext);
   const [activeTab, setActiveTab] = useState('deliveries');
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedOrderForNav, setSelectedOrderForNav] = useState<Delivery | null>(null);
 
   const userDeliveries = deliveries.filter(d => {
     if (currentUser?.role === Role.SuperAdmin || currentUser?.role === Role.Admin) return true;
@@ -24,6 +25,11 @@ const Dashboard: React.FC = () => {
   });
 
   const hasActivity = userDeliveries.length > 0;
+
+  const handleLocateOrder = (delivery: Delivery) => {
+    setSelectedOrderForNav(delivery);
+    setActiveTab('map');
+  };
 
   const settleVendor = (vendorId: string) => {
     const vendor = allUsers.find(u => u.id === vendorId);
@@ -92,14 +98,21 @@ const Dashboard: React.FC = () => {
               </div>
             ) : (
               <>
-                <DeliveriesTable title="Live Queue" deliveries={userDeliveries.filter(d => d.status !== 'Delivered' && d.status !== 'Failed')} />
-                <DeliveriesTable title="Archive" deliveries={userDeliveries.filter(d => d.status === 'Delivered' || d.status === 'Failed')} />
+                <DeliveriesTable 
+                  title="Live Queue" 
+                  deliveries={userDeliveries.filter(d => d.status !== 'Delivered' && d.status !== 'Failed')} 
+                  onLocate={handleLocateOrder}
+                />
+                <DeliveriesTable 
+                  title="Archive" 
+                  deliveries={userDeliveries.filter(d => d.status === 'Delivered' || d.status === 'Failed')} 
+                />
               </>
             )}
           </div>
         );
       case 'map':
-        return <MapView />;
+        return <MapView targetOrder={selectedOrderForNav} />;
       case 'manageStaff':
         return <ManageStaff />;
       case 'financials':
@@ -132,7 +145,10 @@ const Dashboard: React.FC = () => {
             {availableTabs.map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  if (tab.id !== 'map') setSelectedOrderForNav(null);
+                }}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 ${
                   activeTab === tab.id
                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 translate-x-1'
@@ -148,9 +164,19 @@ const Dashboard: React.FC = () => {
       </aside>
 
       <div className="flex-grow min-w-0">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight font-outfit uppercase">Logistics Command</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">Welcome back, <span className="font-bold text-slate-700 dark:text-slate-300">{currentUser?.name}</span> • <span className="text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest text-[10px]">{currentUser?.role}</span></p>
+        <div className="mb-8 flex justify-between items-end">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight font-outfit uppercase">Logistics Command</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">Welcome back, <span className="font-bold text-slate-700 dark:text-slate-300">{currentUser?.name}</span> • <span className="text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest text-[10px]">{currentUser?.role}</span></p>
+          </div>
+          {activeTab === 'map' && selectedOrderForNav && (
+            <button 
+              onClick={() => setSelectedOrderForNav(null)}
+              className="text-[10px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-500/10 px-3 py-1.5 rounded-lg transition-all"
+            >
+              Exit Navigation Mode
+            </button>
+          )}
         </div>
         {renderContent()}
       </div>

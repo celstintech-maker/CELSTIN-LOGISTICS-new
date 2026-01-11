@@ -8,7 +8,7 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import CustomerView from './components/CustomerView';
 import ChatWidget from './components/ChatWidget';
-import { db, auth, syncCollection, onAuthStateChanged, signOut } from './firebase';
+import { db, auth, syncCollection, onAuthStateChanged, signOut, updateData } from './firebase';
 import { doc, onSnapshot, query, collection, where, orderBy, limit } from 'firebase/firestore';
 
 export interface ChatMessage {
@@ -102,23 +102,45 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
   });
 
+  // Rider Geolocation Tracking
+  useEffect(() => {
+    if (currentUser?.role !== Role.Rider) return;
+
+    let watchId: number;
+    if ("geolocation" in navigator) {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          updateData('users', currentUser.id, {
+            location: {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            }
+          }).catch(console.error);
+        },
+        (error) => console.warn("Geolocation watch error:", error),
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+      );
+    }
+
+    return () => {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+    };
+  }, [currentUser?.id, currentUser?.role]);
+
   // Main Auth and Profile Synchronization logic
   useEffect(() => {
     let profileUnsubscribe: (() => void) | null = null;
 
     const authUnsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      // Clean up previous profile listener if any
       if (profileUnsubscribe) {
         profileUnsubscribe();
         profileUnsubscribe = null;
       }
 
       if (firebaseUser) {
-        // Create a real-time listener for this user's profile
         profileUnsubscribe = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
           if (docSnap.exists()) {
             const profile = { id: docSnap.id, ...docSnap.data() } as User;
-            // Only set current user if they are active
             if (profile.active !== false) {
               setCurrentUser(profile);
             } else {

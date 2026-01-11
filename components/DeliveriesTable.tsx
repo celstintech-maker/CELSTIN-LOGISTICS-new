@@ -4,12 +4,13 @@ import { Delivery, DeliveryStatus, PaymentStatus, Role } from '../types';
 import { AppContext } from '../App';
 import Modal from './Modal';
 import { CustomerInfo } from '../types';
-import { UserCircleIcon } from './icons';
+import { UserCircleIcon, MapIcon } from './icons';
 import { updateData, pushData } from '../firebase';
 
 interface DeliveriesTableProps {
   title: string;
   deliveries: Delivery[];
+  onLocate?: (delivery: Delivery) => void;
 }
 
 const statusStyles: { [key in DeliveryStatus]: string } = {
@@ -23,7 +24,7 @@ const statusStyles: { [key in DeliveryStatus]: string } = {
   [DeliveryStatus.Failed]: 'bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20',
 };
 
-const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) => {
+const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, onLocate }) => {
     const { currentUser, allUsers, systemSettings } = useContext(AppContext);
     const [selectedCustomer, setSelectedCustomer] = useState<CustomerInfo | null>(null);
     const [verifyingId, setVerifyingId] = useState<string | null>(null);
@@ -221,20 +222,31 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
                                         )}
                                         
                                         {currentUser?.role === Role.Rider && d.rider?.id === currentUser.id && (
-                                            <select 
-                                                value={d.status} 
-                                                onChange={(e) => handleStatusChange(d.id, e.target.value as DeliveryStatus)}
-                                                className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                                            >
-                                                <option value={DeliveryStatus.Pending}>Pending</option>
-                                                <option value={DeliveryStatus.Assigned}>Assigned</option>
-                                                <option value={DeliveryStatus.PickedUp}>Picked Up</option>
-                                                <option value={DeliveryStatus.InProgress}>In Progress</option>
-                                                <option value={DeliveryStatus.InTransit}>In Transit</option>
-                                                <option value={DeliveryStatus.Completed}>Completed</option>
-                                                <option value={DeliveryStatus.Delivered}>Delivered</option>
-                                                <option value={DeliveryStatus.Failed}>Failed</option>
-                                            </select>
+                                            <div className="flex items-center gap-2">
+                                                {(d.status === DeliveryStatus.PickedUp || d.status === DeliveryStatus.InTransit) && onLocate && (
+                                                  <button 
+                                                    onClick={() => onLocate(d)}
+                                                    className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-all shadow-md"
+                                                    title="Locate Address"
+                                                  >
+                                                    <MapIcon className="w-4 h-4" />
+                                                  </button>
+                                                )}
+                                                <select 
+                                                    value={d.status} 
+                                                    onChange={(e) => handleStatusChange(d.id, e.target.value as DeliveryStatus)}
+                                                    className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                                >
+                                                    <option value={DeliveryStatus.Pending}>Pending</option>
+                                                    <option value={DeliveryStatus.Assigned}>Assigned</option>
+                                                    <option value={DeliveryStatus.PickedUp}>Picked Up</option>
+                                                    <option value={DeliveryStatus.InProgress}>In Progress</option>
+                                                    <option value={DeliveryStatus.InTransit}>In Transit</option>
+                                                    <option value={DeliveryStatus.Completed}>Completed</option>
+                                                    <option value={DeliveryStatus.Delivered}>Delivered</option>
+                                                    <option value={DeliveryStatus.Failed}>Failed</option>
+                                                </select>
+                                            </div>
                                         )}
                                     </div>
                                 </td>
