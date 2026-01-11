@@ -154,13 +154,17 @@ const App: React.FC = () => {
         profileUnsubscribe = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
           if (docSnap.exists()) {
             const profile = { id: docSnap.id, ...docSnap.data() } as User;
-            if (profile.active !== false) {
+            // Only allow active, non-deleted users to stay logged in
+            if (profile.active !== false && !profile.isDeleted) {
               setCurrentUser(profile);
             } else {
               setCurrentUser(null);
+              // Explicitly sign out if they were deactivated while logged in
+              signOut(auth);
             }
           } else {
             setCurrentUser(null);
+            signOut(auth);
           }
         });
       } else {

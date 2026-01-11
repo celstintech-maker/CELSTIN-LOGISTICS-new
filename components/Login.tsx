@@ -35,10 +35,19 @@ const Login: React.FC = () => {
         return;
       }
 
+      // Check for logical deletion first
+      if (profile.isDeleted) {
+        setMessage({ text: 'ACCOUNT DEACTIVATED: This account has been archived by the administration. Please contact a Super Admin for restoration.', type: 'error' });
+        await signOut(auth);
+        setIsLoading(false);
+        return;
+      }
+
+      // Check for pending approval
       if (profile.active === false) {
         setMessage({ text: 'ENROLLMENT PENDING: Your account is awaiting Super Admin verification. Please try again after approval.', type: 'error' });
-        // We stay logged in (Auth-wise) so that the App.tsx listener can detect when 'active' becomes true
-        // But we don't call setCurrentUser here; App.tsx handles the state transition.
+        // We sign out to prevent the app from attempting to load an unauthorized state
+        await signOut(auth);
         setIsLoading(false);
         return;
       }
@@ -91,6 +100,7 @@ const Login: React.FC = () => {
         email: trimmedEmail,
         role: isSuperAdminEmail ? Role.SuperAdmin : role,
         active: isSuperAdminEmail, 
+        isDeleted: false,
         commissionBalance: 0,
         totalWithdrawn: 0,
         commissionRate: 0.1
