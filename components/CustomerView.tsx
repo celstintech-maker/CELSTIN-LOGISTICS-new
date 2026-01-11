@@ -10,24 +10,41 @@ const CustomerView: React.FC = () => {
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [lastDeliveryId, setLastDeliveryId] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    const [origin, setOrigin] = useState('');
+    const [destination, setDestination] = useState('');
+    const [pricePreview, setPricePreview] = useState<number>(1500);
+
+    useEffect(() => {
+        if (origin.trim() && destination.trim()) {
+            const seed = (origin.trim().length + destination.trim().length) % 15;
+            const estimatedKm = 5 + seed;
+            const price = Math.max(1500, estimatedKm * systemSettings.pricePerKm);
+            setPricePreview(price);
+        } else {
+            setPricePreview(1500);
+        }
+    }, [origin, destination, systemSettings.pricePerKm]);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setIsSubmitting(true);
         const formData = new FormData(e.currentTarget);
         
-        const newDelivery: Partial<Delivery> = {
+        const newDelivery: any = {
             customer: {
                 id: `cust-${Date.now()}`,
-                name: formData.get('customerName') as string,
-                phone: formData.get('customerPhone') as string,
+                name: (formData.get('customerName') as string).trim(),
+                phone: (formData.get('customerPhone') as string).trim(),
             },
-            pickupAddress: formData.get('pickupAddress') as string,
-            dropoffAddress: formData.get('dropoffAddress') as string,
-            packageNotes: formData.get('packageNotes') as string,
+            pickupAddress: origin.trim(),
+            dropoffAddress: destination.trim(),
+            packageNotes: (formData.get('packageNotes') as string || 'Standard Delivery').trim(),
             status: DeliveryStatus.Pending,
             paymentStatus: PaymentStatus.Unpaid,
-            price: 1500 + Math.floor(Math.random() * 10) * 150,
+            price: pricePreview,
+            createdAt: new Date(),
+            vendorId: 'guest-dispatch'
         };
 
         try {
@@ -35,8 +52,11 @@ const CustomerView: React.FC = () => {
             setLastDeliveryId(firebaseId || 'pending');
             setShowPaymentModal(true);
             e.currentTarget.reset();
+            setOrigin('');
+            setDestination('');
         } catch (error) {
-            alert("Connection error. Terminal sync failed.");
+            console.error(error);
+            alert("Connection error. Terminal sync failed. Please try again.");
         } finally {
             setIsSubmitting(false);
         }
@@ -45,11 +65,13 @@ const CustomerView: React.FC = () => {
     return (
         <div className="bg-white dark:bg-slate-900/40 p-8 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 backdrop-blur-md transition-colors">
              <div className="text-center mb-10">
-                <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white font-outfit tracking-tight">Rapid Logistics in Asaba</h2>
+                <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white font-outfit tracking-tight">{systemSettings.heroTitle}</h2>
                 <div className="h-1.5 w-24 bg-indigo-500 mx-auto mt-4 rounded-full shadow-lg shadow-indigo-500/20"></div>
                 <p className="mt-6 text-lg text-slate-500 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
-                    Premium coverage starting at <span className="text-indigo-600 dark:text-indigo-400 font-black">₦1,500</span> base. 
-                    Monitor your assets in real-time across the Delta region.
+                    {systemSettings.heroSubtext}
+                </p>
+                <p className="mt-2 text-sm font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">
+                    Starting at ₦{(systemSettings.pricePerKm * 10).toLocaleString()} base rate
                 </p>
             </div>
 
@@ -68,11 +90,29 @@ const CustomerView: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                         <label htmlFor="pickupAddress" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Origin Terminal</label>
-                        <input type="text" name="pickupAddress" id="pickupAddress" required className="customer-input" placeholder="Pickup location in Asaba" />
+                        <input 
+                            type="text" 
+                            name="pickupAddress" 
+                            id="pickupAddress" 
+                            required 
+                            value={origin}
+                            onChange={(e) => setOrigin(e.target.value)}
+                            className="customer-input" 
+                            placeholder="Pickup location in Asaba" 
+                        />
                     </div>
                     <div className="space-y-2">
                         <label htmlFor="dropoffAddress" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Destination Node</label>
-                        <input type="text" name="dropoffAddress" id="dropoffAddress" required className="customer-input" placeholder="Final dropoff location" />
+                        <input 
+                            type="text" 
+                            name="dropoffAddress" 
+                            id="dropoffAddress" 
+                            required 
+                            value={destination}
+                            onChange={(e) => setDestination(e.target.value)}
+                            className="customer-input" 
+                            placeholder="Final dropoff location" 
+                        />
                     </div>
                 </div>
 
@@ -90,7 +130,7 @@ const CustomerView: React.FC = () => {
                         {isSubmitting && (
                              <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         )}
-                        {isSubmitting ? 'Transmitting...' : 'Initialize Dispatch Protocol'}
+                        {isSubmitting ? 'Transmitting...' : `Initialize Protocol - ₦${pricePreview.toLocaleString()}`}
                     </button>
                 </div>
             </form>
@@ -102,7 +142,7 @@ const CustomerView: React.FC = () => {
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
                         </div>
                         <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 font-outfit uppercase">Manifest Encrypted</h3>
-                        <p className="text-slate-500 dark:text-slate-400 mb-6 text-sm leading-relaxed">System initialized. Transmit settlement to the corporate vault for instant activation.</p>
+                        <p className="text-slate-500 dark:text-slate-400 mb-6 text-sm leading-relaxed">System initialized. Transmit settlement of ₦{pricePreview.toLocaleString()} to the corporate vault for instant activation.</p>
                         <div className="bg-slate-50 dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 text-left space-y-4">
                             <div>
                                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">Vault Holder</p>

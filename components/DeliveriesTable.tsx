@@ -5,6 +5,7 @@ import { AppContext } from '../App';
 import Modal from './Modal';
 import { CustomerInfo } from '../types';
 import { UserCircleIcon } from './icons';
+import { updateData, pushData } from '../firebase';
 
 interface DeliveriesTableProps {
   title: string;
@@ -15,47 +16,73 @@ const statusStyles: { [key in DeliveryStatus]: string } = {
   [DeliveryStatus.Pending]: 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',
   [DeliveryStatus.Assigned]: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20',
   [DeliveryStatus.PickedUp]: 'bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20',
+  [DeliveryStatus.InProgress]: 'bg-cyan-50 text-cyan-700 border-cyan-100 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20',
   [DeliveryStatus.InTransit]: 'bg-purple-50 text-purple-700 border-purple-100 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20',
+  [DeliveryStatus.Completed]: 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
   [DeliveryStatus.Delivered]: 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
   [DeliveryStatus.Failed]: 'bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20',
 };
 
 const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) => {
-    const { currentUser, setDeliveries, allUsers } = useContext(AppContext);
+    const { currentUser, allUsers, systemSettings } = useContext(AppContext);
     const [selectedCustomer, setSelectedCustomer] = useState<CustomerInfo | null>(null);
     const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
-    const handleStatusChange = (id: string, newStatus: DeliveryStatus) => {
-        setDeliveries(prev => prev.map(d => {
-            if (d.id === id) {
-                // When marking as delivered, ensure a vendor is associated if missing
-                // This ensures the commission logic has someone to credit
-                const updated = { ...d, status: newStatus };
-                if (newStatus === DeliveryStatus.Delivered && !updated.vendorId) {
-                    const firstVendor = allUsers.find(u => u.role === Role.Vendor);
-                    updated.vendorId = firstVendor?.id;
-                }
-                return updated;
-            }
-            return d;
-        }));
+    const handleStatusChange = async (id: string, newStatus: DeliveryStatus) => {
+        try {
+            await updateData('deliveries', id, { status: newStatus });
+        } catch (error) {
+            console.error("Update failed", error);
+            alert("Status update failed. Check connection.");
+        }
     };
 
-    const handleVerifyPayment = (id: string) => {
-        setVerifyingId(id);
-        // Simulate network/bank verification delay
-        setTimeout(() => {
-            setDeliveries(prev => prev.map(d => 
-                d.id === id ? { ...d, paymentStatus: PaymentStatus.Paid } : d
-            ));
-            setVerifyingId(null);
-        }, 1500);
+    const handleAssignRider = async (deliveryId: string, riderId: string) => {
+        const rider = allUsers.find(u => u.id === riderId);
+        if (!rider) return;
+
+        try {
+            await updateData('deliveries', deliveryId, { 
+                rider: { id: rider.id, name: rider.name, phone: rider.phone },
+                status: DeliveryStatus.Assigned
+            });
+
+            await pushData('notifications', {
+                userId: riderId,
+                title: 'New Dispatch Assigned',
+                body: `You have been assigned a new delivery to ${deliveries.find(d => d.id === deliveryId)?.dropoffAddress}.`,
+                type: 'assignment',
+                createdAt: new Date()
+            });
+        } catch (error) {
+            alert("Rider assignment sync failed.");
+        }
     };
+
+    const handleVerifyPayment = async (id: string) => {
+        setVerifyingId(id);
+        try {
+            await updateData('deliveries', id, { paymentStatus: PaymentStatus.Paid });
+        } catch (error) {
+            alert("Verification failed.");
+        } finally {
+            setVerifyingId(null);
+        }
+    };
+
+    const calculateCommission = (price: number) => {
+        const rate = currentUser?.commissionRate ?? systemSettings.standardCommissionRate ?? 0.1;
+        const amount = price * rate;
+        // Limit to 2500 per user request
+        return Math.min(amount, 2500);
+    };
+
+    const riders = allUsers.filter(u => u.role === Role.Rider && u.active !== false);
 
     return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-colors mb-8">
             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/30 dark:bg-slate-900">
-                <h3 className="font-bold text-slate-800 dark:text-slate-100 tracking-tight font-outfit uppercase text-sm">{title}</h3>
+                <h3 className="font-bold text-slate-800 dark:text-white tracking-tight font-outfit uppercase text-sm">{title}</h3>
                 <span className="text-[10px] font-bold px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg uppercase tracking-wider">{deliveries.length} Records</span>
             </div>
             <div className="overflow-x-auto">
@@ -66,6 +93,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
                             <th className="px-6 py-4">Entities</th>
                             <th className="px-6 py-4">Route Info</th>
                             <th className="px-6 py-4">Value & Settlement</th>
+                            {currentUser?.role === Role.Vendor && <th className="px-6 py-4">Commission</th>}
                             <th className="px-6 py-4">Progress</th>
                             <th className="px-6 py-4 text-right">Actions</th>
                         </tr>
@@ -73,7 +101,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {deliveries.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-6 py-12 text-center text-slate-400 italic">No logistics records found in this category.</td>
+                                <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">No logistics records found in this category.</td>
                             </tr>
                         ) : deliveries.map((d) => (
                             <tr key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
@@ -105,6 +133,14 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
                                         )}
                                     </div>
                                 </td>
+                                {currentUser?.role === Role.Vendor && (
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-indigo-600 dark:text-indigo-400">₦{calculateCommission(d.price).toLocaleString()}</span>
+                                            <span className="text-[8px] uppercase font-black text-slate-400 tracking-tighter">Yield Balance</span>
+                                        </div>
+                                    </td>
+                                )}
                                 <td className="px-6 py-4">
                                     <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${statusStyles[d.status]}`}>
                                         {d.status}
@@ -125,19 +161,33 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries }) 
                                                 {verifyingId === d.id ? 'Verifying...' : 'Verify Transfer'}
                                             </button>
                                         )}
+
+                                        {[Role.SuperAdmin, Role.Admin, Role.Vendor].includes(currentUser?.role as Role) && !d.rider && (
+                                            <select 
+                                                onChange={(e) => handleAssignRider(d.id, e.target.value)}
+                                                className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1.5 rounded-lg outline-none cursor-pointer"
+                                                defaultValue=""
+                                            >
+                                                <option value="" disabled>Assign Rider</option>
+                                                {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                            </select>
+                                        )}
                                         
-                                        {currentUser?.role === Role.Rider ? (
+                                        {currentUser?.role === Role.Rider && d.rider?.id === currentUser.id && (
                                             <select 
                                                 value={d.status} 
                                                 onChange={(e) => handleStatusChange(d.id, e.target.value as DeliveryStatus)}
                                                 className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
                                             >
-                                                {Object.values(DeliveryStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                                                <option value={DeliveryStatus.Pending}>Pending</option>
+                                                <option value={DeliveryStatus.Assigned}>Assigned</option>
+                                                <option value={DeliveryStatus.PickedUp}>Picked Up</option>
+                                                <option value={DeliveryStatus.InProgress}>In Progress</option>
+                                                <option value={DeliveryStatus.InTransit}>In Transit</option>
+                                                <option value={DeliveryStatus.Completed}>Completed</option>
+                                                <option value={DeliveryStatus.Delivered}>Delivered</option>
+                                                <option value={DeliveryStatus.Failed}>Failed</option>
                                             </select>
-                                        ) : (
-                                            <button className="text-slate-300 dark:text-slate-700 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors opacity-0 group-hover:opacity-100">
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
-                                            </button>
                                         )}
                                     </div>
                                 </td>

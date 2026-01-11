@@ -104,7 +104,6 @@ const Settings: React.FC = () => {
                                 placeholder="150"
                               />
                             </div>
-                            <p className="mt-2 text-[9px] text-slate-500 uppercase tracking-widest font-bold">This value dictates the base calculation for all new delivery manifests.</p>
                         </FormField>
                     </SettingsCard>
 
@@ -112,15 +111,23 @@ const Settings: React.FC = () => {
                         <FormField label="Official Brand Name">
                             <input type="text" name="businessName" value={settings.businessName} onChange={handleInputChange} className="form-input" />
                         </FormField>
+                        <FormField label="Landing Page Hero Headline">
+                            <input type="text" name="heroTitle" value={settings.heroTitle} onChange={handleInputChange} className="form-input" placeholder="e.g. Rapid Logistics in Asaba" />
+                        </FormField>
+                        <FormField label="Landing Page Subtext">
+                            <textarea name="heroSubtext" value={settings.heroSubtext} onChange={handleInputChange} rows={2} className="form-input" placeholder="Promotional subtext copy..." />
+                        </FormField>
                         <FormField label="Headquarters Address">
-                            <textarea name="businessAddress" value={settings.businessAddress} onChange={handleInputChange} rows={3} className="form-input" />
+                            <textarea name="businessAddress" value={settings.businessAddress} onChange={handleInputChange} rows={2} className="form-input" />
                         </FormField>
                         <FormField label="Corporate Logo">
                             <div className="flex flex-col gap-4">
                                 {settings.logoUrl ? (
                                     <div className="relative group w-32 h-32">
                                         <img src={settings.logoUrl} className="w-full h-full rounded-2xl object-cover border-2 border-slate-100 dark:border-slate-800 bg-white shadow-sm" alt="Logo preview" />
-                                        <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-2 text-center uppercase tracking-widest">Active Asset</p>
+                                        <button onClick={() => setSettings(s => ({...s, logoUrl: ''}))} className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 shadow-lg">
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
                                     </div>
                                 ) : (
                                     <button 
@@ -169,18 +176,6 @@ const Settings: React.FC = () => {
                                     Midnight Onyx
                                 </button>
                             </div>
-                         </FormField>
-                         <FormField label="Application Accent Color">
-                             <div className="flex gap-4 pt-2">
-                                {['blue', 'green', 'indigo', 'red'].map(color => (
-                                    <button 
-                                        key={color} 
-                                        onClick={() => setSettings(s => ({...s, primaryColor: color}))}
-                                        className={`w-10 h-10 rounded-full border-4 transition-all shadow-md ${settings.primaryColor === color ? 'border-slate-800 dark:border-white scale-110 ring-4 ring-indigo-500/10' : 'border-transparent opacity-60 hover:opacity-100'}`}
-                                        style={{ backgroundColor: color === 'blue' ? '#2563eb' : color === 'green' ? '#10b981' : color === 'indigo' ? '#4f46e5' : '#ef4444' }}
-                                    />
-                                ))}
-                             </div>
                          </FormField>
                     </SettingsCard>
                 </div>

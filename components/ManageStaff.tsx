@@ -6,9 +6,8 @@ import { updateData, db } from '../firebase';
 import { deleteDoc, doc } from 'firebase/firestore';
 
 const ManageStaff: React.FC = () => {
-    const { allUsers, setAllUsers, currentUser, recoveryRequests, setRecoveryRequests } = useContext(AppContext);
+    const { allUsers, currentUser, recoveryRequests, setRecoveryRequests } = useContext(AppContext);
     const [showCreateForm, setShowCreateForm] = useState(false);
-    const [newUser, setNewUser] = useState({ name: '', email: '', phone: '', role: Role.Rider, pin: '' });
     const [actionMessage, setActionMessage] = useState({ text: '', type: 'info' });
 
     const isSuperAdmin = currentUser?.role === Role.SuperAdmin;
@@ -22,17 +21,8 @@ const ManageStaff: React.FC = () => {
         setTimeout(() => setActionMessage({ text: '', type: 'info' }), 3000);
     };
 
-    const handleCreateUser = async (e: React.FormEvent) => {
-        e.preventDefault();
-        // Manual creation usually happens via the Register screen, 
-        // but if Super Admin creates one, we'd need to handle Auth too.
-        // For simplicity, we mostly manage existing accounts here.
-        alert("Employee registration should be done via the standard enrollment portal for security compliance. Use this terminal for profile management only.");
-    };
-
     const handleApprove = async (userId: string) => {
         try {
-            // PERSIST TO FIRESTORE
             await updateData('users', userId, { active: true });
             showToast('Account approved and activated globally.', 'success');
         } catch (error) {
@@ -43,7 +33,6 @@ const ManageStaff: React.FC = () => {
     const handleReject = async (userId: string) => {
         if (window.confirm('Are you sure you want to permanently delete this application?')) {
             try {
-                // Remove from Firestore
                 await deleteDoc(doc(db, 'users', userId));
                 showToast('Application rejected and deleted from registry.', 'info');
             } catch (error) {
@@ -88,6 +77,16 @@ const ManageStaff: React.FC = () => {
             showToast('Secure PIN updated.', 'success');
         } catch (error) {
             showToast('Failed to update PIN in cloud.', 'error');
+        }
+    };
+
+    const handleCommissionRateUpdate = async (userId: string, rate: number) => {
+        try {
+            const cleanRate = Math.min(Math.max(rate / 100, 0), 0.5); // Cap at 50% max for sanity
+            await updateData('users', userId, { commissionRate: cleanRate });
+            showToast(`Commission rate for merchant updated.`, 'success');
+        } catch (error) {
+            showToast('Failed to sync commission rate.', 'error');
         }
     };
 
@@ -176,14 +175,6 @@ const ManageStaff: React.FC = () => {
                         <h2 className="text-xl font-bold text-slate-900 dark:text-white font-outfit uppercase">Workforce Registry</h2>
                         <p className="text-slate-500 dark:text-slate-400 text-sm">Manage roles and security credentials</p>
                     </div>
-                    {isSuperAdmin && (
-                        <button 
-                            onClick={() => setShowCreateForm(!showCreateForm)}
-                            className="bg-slate-900 dark:bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 dark:hover:bg-indigo-500 transition-all shadow-lg dark:shadow-indigo-500/20"
-                        >
-                            {showCreateForm ? 'Cancel Registry Access' : 'Register New Employee'}
-                        </button>
-                    )}
                 </div>
 
                 <div className="overflow-x-auto">
@@ -192,6 +183,7 @@ const ManageStaff: React.FC = () => {
                             <tr>
                                 <th className="px-6 py-4">Employee Identity</th>
                                 <th className="px-6 py-4">Authorization Role</th>
+                                <th className="px-6 py-4">Yield (Rate %)</th>
                                 <th className="px-6 py-4">Secure PIN</th>
                                 <th className="px-6 py-4">Status</th>
                                 {isSuperAdmin && <th className="px-6 py-4 text-right">Actions</th>}
@@ -215,6 +207,21 @@ const ManageStaff: React.FC = () => {
                                             </select>
                                         ) : (
                                             <span className="text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] tracking-tight">{user.role}</span>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {isSuperAdmin && user.role === Role.Vendor ? (
+                                            <div className="flex items-center gap-2">
+                                                <input 
+                                                    type="number" 
+                                                    defaultValue={Math.round((user.commissionRate || 0.1) * 100)}
+                                                    onBlur={(e) => handleCommissionRateUpdate(user.id, parseFloat(e.target.value))}
+                                                    className="w-12 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-center font-bold text-indigo-500 rounded-lg py-1 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                />
+                                                <span className="text-[10px] font-bold text-slate-400">%</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-400 text-[10px] font-bold">{user.role === Role.Vendor ? `${Math.round((user.commissionRate || 0.1) * 100)}%` : 'N/A'}</span>
                                         )}
                                     </td>
                                     <td className="px-6 py-4">
@@ -252,26 +259,6 @@ const ManageStaff: React.FC = () => {
                     </table>
                 </div>
             </div>
-
-            <style>{`
-                .staff-input {
-                    padding: 0.875rem;
-                    border-radius: 1rem;
-                    border: 1px solid #e2e8f0;
-                    background: white;
-                    outline: none;
-                    font-size: 0.875rem;
-                    font-weight: 600;
-                    transition: all 0.2s;
-                    color: #1e293b;
-                }
-                .dark .staff-input {
-                    background: #0f172a;
-                    border-color: #1e293b;
-                    color: white;
-                }
-                .staff-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); }
-            `}</style>
         </div>
     );
 };

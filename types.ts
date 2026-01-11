@@ -11,7 +11,9 @@ export enum DeliveryStatus {
   Pending = 'Pending',
   Assigned = 'Assigned',
   PickedUp = 'Picked Up',
+  InProgress = 'In Progress',
   InTransit = 'In Transit',
+  Completed = 'Completed',
   Delivered = 'Delivered',
   Failed = 'Failed',
 }
@@ -72,19 +74,14 @@ export interface Delivery {
   status: DeliveryStatus;
   paymentStatus: PaymentStatus;
   price: number;
-  createdAt: Date;
-}
-
-export interface VendorPerformance {
-  vendorId: string;
-  totalOrders: number;
-  completedOrders: number;
-  onTimeRate: number;
+  createdAt: any; 
 }
 
 export interface SystemSettings {
     businessName: string;
     businessAddress: string;
+    heroTitle: string;
+    heroSubtext: string;
     logoUrl: string;
     primaryColor: string;
     paymentAccountName: string;
@@ -93,5 +90,12 @@ export interface SystemSettings {
     footerText: string;
     theme: 'light' | 'dark';
     standardCommissionRate: number;
-    pricePerKm: number; // Added for Super Admin control
+    pricePerKm: number; 
+}
+
+export interface VendorPerformance {
+  vendorId: string;
+  totalOrders: number;
+  completedOrders: number;
+  onTimeRate: number;
 }
