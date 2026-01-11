@@ -36,7 +36,7 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
-// Attempt to enable offline persistence
+// Enable offline persistence for better mobile reliability
 enableIndexedDbPersistence(db).catch((err) => {
     if (err.code === 'failed-precondition') {
         console.warn('Multiple tabs open, persistence enabled in only one.');
@@ -47,13 +47,21 @@ enableIndexedDbPersistence(db).catch((err) => {
 
 export { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged };
 
+/**
+ * Fetches user metadata from Firestore based on their Auth UID
+ */
 export const getUserProfile = async (uid: string) => {
-  const docRef = doc(db, "users", uid);
-  const docSnap = await getDoc(docRef);
-  if (docSnap.exists()) {
-    return { id: docSnap.id, ...docSnap.data() };
+  try {
+    const docRef = doc(db, "users", uid);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    return null;
   }
-  return null;
 };
 
 export const syncCollection = (collectionName: string, callback: (data: any[]) => void, onError?: (err: any) => void) => {
@@ -84,8 +92,8 @@ export const setProfileData = async (uid: string, data: any) => {
   try {
     await setDoc(doc(db, "users", uid), {
       ...data,
-      createdAt: serverTimestamp()
-    });
+      updatedAt: serverTimestamp()
+    }, { merge: true });
   } catch (e: any) {
     console.error("Error setting profile: ", e);
     throw e;

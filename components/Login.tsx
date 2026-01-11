@@ -24,23 +24,27 @@ const Login: React.FC = () => {
     setMessage({ text: '', type: 'info' });
 
     try {
-      const userCredential = await signInWithEmailAndPassword((e.target as any).email.value, password);
+      const userCredential = await signInWithEmailAndPassword(emailInput, password);
       const profile = await getUserProfile(userCredential.user.uid);
       
       if (!profile) {
-        setMessage({ text: 'Profile record not found in registry.', type: 'error' });
+        setMessage({ text: 'Access Error: Identity profile missing from registry.', type: 'error' });
         return;
       }
 
       if ((profile as any).active === false) {
-        setMessage({ text: 'Access pending terminal approval.', type: 'error' });
+        setMessage({ text: 'Access Denied: Terminal approval still pending.', type: 'error' });
         return;
       }
 
       setCurrentUser(profile as User);
     } catch (error: any) {
-      console.error(error);
-      setMessage({ text: 'Invalid credentials or network failure.', type: 'error' });
+      console.error("Login error:", error.code);
+      let errorMsg = 'Authentication failed. Please check credentials.';
+      if (error.code === 'auth/invalid-credential') errorMsg = 'Invalid email or access token.';
+      if (error.code === 'auth/user-not-found') errorMsg = 'User not found in registry.';
+      
+      setMessage({ text: errorMsg, type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -51,17 +55,16 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setMessage({ text: '', type: 'info' });
 
-    const emailValue = (e.target as any).email.value;
-    const needsApproval = [Role.Vendor, Role.Rider].includes(role);
+    const needsApproval = [Role.Vendor, Role.Rider, Role.Admin].includes(role);
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(emailValue, password);
+      const userCredential = await createUserWithEmailAndPassword(emailInput, password);
       
       const newUserProfile: Partial<User> = {
         id: userCredential.user.uid,
         name,
         phone,
-        email: emailValue,
+        email: emailInput,
         role,
         active: !needsApproval,
         commissionBalance: 0,
@@ -72,29 +75,21 @@ const Login: React.FC = () => {
       await setProfileData(userCredential.user.uid, newUserProfile);
       
       if (needsApproval) {
-        setMessage({ text: 'Registration successful. Awaiting admin approval.', type: 'success' });
+        setMessage({ text: 'Enrollment successful. Terminal admin must verify your account before login.', type: 'success' });
         setView('login');
       } else {
         setCurrentUser(newUserProfile as User);
       }
     } catch (error: any) {
-      console.error(error);
-      setMessage({ text: error.message.includes('email-already-in-use') ? 'Email already indexed.' : 'Registration failed.', type: 'error' });
+      console.error("Registration error:", error);
+      let errorMsg = 'Registration failed.';
+      if (error.code === 'auth/email-already-in-use') errorMsg = 'Email already indexed in our registry.';
+      if (error.code === 'auth/weak-password') errorMsg = 'Access token is too simple (min 6 chars).';
+      
+      setMessage({ text: errorMsg, type: 'error' });
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleRecoveryRequest = (e: React.FormEvent) => {
-    e.preventDefault();
-    setRecoveryRequests(prev => [...prev, {
-        id: `rec-${Date.now()}`,
-        name,
-        phone,
-        timestamp: new Date()
-    }]);
-    setMessage({ text: 'Recovery signal transmitted. Admin will contact you.', type: 'success' });
-    setView('login');
   };
 
   return (
@@ -119,16 +114,33 @@ const Login: React.FC = () => {
       {view === 'login' && (
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Corporate Email</label>
-            <input name="email" type="email" required placeholder="user@celstin.com" className="form-input-dark" />
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Corporate Email</label>
+            <input 
+              type="email" 
+              required 
+              placeholder="user@celstin.com" 
+              className="form-input-dark" 
+              value={emailInput} 
+              onChange={(e) => setEmailInput(e.target.value)}
+              disabled={isLoading}
+            />
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Access Token</label>
-            <input type="password" required placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="form-input-dark" />
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Access Token</label>
+            <input 
+              type="password" 
+              required 
+              placeholder="••••••••" 
+              className="form-input-dark" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+            />
           </div>
           <button type="submit" disabled={isLoading} className="btn-primary-dark flex items-center justify-center gap-2">
-            {isLoading && <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
-            Authenticate
+            {isLoading ? (
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            ) : 'Authenticate'}
           </button>
           <div className="flex justify-between text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-6">
             <button type="button" onClick={() => setView('register')} className="hover:text-indigo-300">Request Access</button>
@@ -140,46 +152,51 @@ const Login: React.FC = () => {
       {view === 'register' && (
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Full Identity Name</label>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Full Identity Name</label>
             <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="form-input-dark" disabled={isLoading} />
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Corporate Email</label>
-            <input name="email" type="email" required className="form-input-dark" disabled={isLoading} />
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Corporate Email</label>
+            <input type="email" required value={emailInput} onChange={(e) => setEmailInput(e.target.value)} className="form-input-dark" disabled={isLoading} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Comms Link</label>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Comms Link</label>
               <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} className="form-input-dark" disabled={isLoading} />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fleet Role</label>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Fleet Role</label>
               <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="form-input-dark appearance-none" disabled={isLoading}>
                 <option value={Role.Customer}>Customer</option>
                 <option value={Role.Vendor}>Vendor</option>
                 <option value={Role.Rider}>Rider</option>
+                <option value={Role.Admin}>Admin</option>
               </select>
             </div>
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Create Access Token</label>
-            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="form-input-dark" disabled={isLoading} />
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Create Access Token</label>
+            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="form-input-dark" disabled={isLoading} placeholder="Min 6 characters" />
           </div>
           <button type="submit" className="btn-primary-dark mt-4 flex items-center justify-center gap-2" disabled={isLoading}>
-            {isLoading && (
+            {isLoading ? (
               <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-            )}
-            Confirm Enrollment
+            ) : 'Confirm Enrollment'}
           </button>
           <button type="button" onClick={() => setView('login')} className="w-full text-[10px] font-bold text-slate-500 uppercase tracking-widest py-2" disabled={isLoading}>Return to Login</button>
         </form>
       )}
 
       {view === 'forgot' && (
-        <form onSubmit={handleRecoveryRequest} className="space-y-4">
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          setRecoveryRequests(prev => [...prev, { id: `rec-${Date.now()}`, name, phone, timestamp: new Date() }]);
+          setMessage({ text: 'Recovery signal transmitted. Admin will contact you.', type: 'success' });
+          setView('login');
+        }} className="space-y-4">
           <p className="text-slate-400 text-[10px] font-medium leading-relaxed mb-4 italic">Providing your registered name and phone will alert a Super Admin to investigate and verify your secure reset.</p>
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Registered Name</label>
