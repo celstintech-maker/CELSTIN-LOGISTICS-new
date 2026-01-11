@@ -29,8 +29,9 @@ const CreateDelivery: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        const form = e.currentTarget; // Capture form reference to avoid null issues after async
         setIsSubmitting(true);
-        const formData = new FormData(e.currentTarget);
+        const formData = new FormData(form);
         
         // CLEAN PAYLOAD FOR FIRESTORE - ensure no undefined/null issues
         const newDelivery: any = {
@@ -53,11 +54,11 @@ const CreateDelivery: React.FC = () => {
 
         try {
             await pushData('deliveries', newDelivery);
-            e.currentTarget.reset();
+            form.reset(); // Use captured form ref
             setOrigin('');
             setDestination('');
             setIsExpanded(false);
-            alert("Order broadcast successful to fleet cloud.");
+            alert(`Order broadcast successful. Total: ₦${estimatedPrice.toLocaleString()}`);
         } catch (error: any) {
             console.error("Broadcast Error Details:", error);
             alert(`Error broadcasting order: ${error.message || 'System mismatch or permission denied.'}`);

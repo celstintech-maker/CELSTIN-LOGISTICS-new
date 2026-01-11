@@ -28,8 +28,9 @@ const CustomerView: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        const form = e.currentTarget; // Capture ref before async
         setIsSubmitting(true);
-        const formData = new FormData(e.currentTarget);
+        const formData = new FormData(form);
         
         const newDelivery: any = {
             customer: {
@@ -51,7 +52,7 @@ const CustomerView: React.FC = () => {
             const firebaseId = await pushData('deliveries', newDelivery);
             setLastDeliveryId(firebaseId || 'pending');
             setShowPaymentModal(true);
-            e.currentTarget.reset();
+            form.reset(); // Safely reset the captured form
             setOrigin('');
             setDestination('');
         } catch (error) {
