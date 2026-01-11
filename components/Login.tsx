@@ -1,4 +1,3 @@
-
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { Role, User } from '../types';
@@ -28,7 +27,7 @@ const Login: React.FC = () => {
       const profile = await getUserProfile(userCredential.user.uid);
       
       if (!profile) {
-        setMessage({ text: 'Access Error: Identity profile missing from registry.', type: 'error' });
+        setMessage({ text: 'Access Error: Identity profile missing from registry. Please Enroll first.', type: 'error' });
         return;
       }
 
@@ -55,7 +54,10 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setMessage({ text: '', type: 'info' });
 
-    const needsApproval = [Role.Vendor, Role.Rider, Role.Admin].includes(role);
+    // Special check for super admin email to bypass manual approval if desired, 
+    // or just leave as is for consistent flow.
+    const isSuperAdminEmail = emailInput.toLowerCase() === 'support@celstin.com';
+    const needsApproval = [Role.Vendor, Role.Rider, Role.Admin].includes(role) && !isSuperAdminEmail;
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, emailInput, password);
@@ -65,7 +67,7 @@ const Login: React.FC = () => {
         name,
         phone,
         email: emailInput,
-        role,
+        role: isSuperAdminEmail ? Role.SuperAdmin : role,
         active: !needsApproval,
         commissionBalance: 0,
         totalWithdrawn: 0,
@@ -118,7 +120,7 @@ const Login: React.FC = () => {
             <input 
               type="email" 
               required 
-              placeholder="user@celstin.com" 
+              placeholder="support@celstin.com" 
               className="form-input-dark" 
               value={emailInput} 
               onChange={(e) => setEmailInput(e.target.value)}
@@ -153,16 +155,16 @@ const Login: React.FC = () => {
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Full Identity Name</label>
-            <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="form-input-dark" disabled={isLoading} />
+            <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="form-input-dark" disabled={isLoading} placeholder="Super Admin" />
           </div>
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Corporate Email</label>
-            <input type="email" required value={emailInput} onChange={(e) => setEmailInput(e.target.value)} className="form-input-dark" disabled={isLoading} />
+            <input type="email" required value={emailInput} onChange={(e) => setEmailInput(e.target.value)} className="form-input-dark" disabled={isLoading} placeholder="support@celstin.com" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Comms Link</label>
-              <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} className="form-input-dark" disabled={isLoading} />
+              <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} className="form-input-dark" disabled={isLoading} placeholder="080..." />
             </div>
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Fleet Role</label>
