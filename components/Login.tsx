@@ -1,4 +1,3 @@
-
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { Role, User } from '../types';
@@ -39,7 +38,7 @@ const Login: React.FC = () => {
         return;
       }
 
-      setCurrentUser(profile as User);
+      setCurrentUser(profile);
     } catch (error: any) {
       let errorMsg = 'Authentication failed. Please check credentials.';
       if (error.code === 'auth/invalid-credential') errorMsg = 'Invalid email or access token.';
@@ -79,6 +78,7 @@ const Login: React.FC = () => {
         await signOut(auth);
         setView('login');
       } else {
+        // Cast here to User because we know we just created it with all required fields
         setCurrentUser(newUserProfile as User);
       }
     } catch (error: any) {

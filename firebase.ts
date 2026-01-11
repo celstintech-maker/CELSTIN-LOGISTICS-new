@@ -20,6 +20,7 @@ import {
   signOut, 
   onAuthStateChanged 
 } from "firebase/auth";
+import { User } from "./types";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDR5ItO2VcxLxcxqp8bmKVQ4QOBhakFZ6g",
@@ -49,12 +50,12 @@ export { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, on
 /**
  * Fetches user metadata from Firestore based on their Auth UID
  */
-export const getUserProfile = async (uid: string) => {
+export const getUserProfile = async (uid: string): Promise<User | null> => {
   try {
     const docRef = doc(db, "users", uid);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() };
+      return { id: docSnap.id, ...docSnap.data() } as User;
     }
     return null;
   } catch (error) {
@@ -101,7 +102,7 @@ export const setProfileData = async (uid: string, data: any) => {
 
 export const updateData = async (collectionName: string, id: string, data: any) => {
   try {
-    const docRef = doc(db, collectionName, id);
+    const docRef = doc(collectionName, id);
     await updateDoc(docRef, {
       ...data,
       updatedAt: serverTimestamp()

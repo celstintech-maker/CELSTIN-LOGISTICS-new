@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Role, Delivery, VendorPerformance, SystemSettings } from './types';
 import { MOCK_USERS, MOCK_DELIVERIES, MOCK_VENDORS_PERFORMANCE } from './constants';
@@ -104,9 +103,9 @@ const App: React.FC = () => {
       if (firebaseUser) {
         const profile = await getUserProfile(firebaseUser.uid);
         if (profile) {
-          // Double check approval status on login
+          // Check approval status on login
           if (profile.active !== false) {
-             setCurrentUser(profile as User);
+             setCurrentUser(profile);
           } else {
              await signOut(auth);
              setCurrentUser(null);
