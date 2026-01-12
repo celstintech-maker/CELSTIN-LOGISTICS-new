@@ -64,7 +64,6 @@ export const AppContext = React.createContext<{
   syncFromCloud: () => Promise<void>;
   isCloudConnected: boolean;
   cloudError: string | null;
-  // User Management Actions
   handleApproveUser: (userId: string) => Promise<void>;
   handleArchiveUser: (userId: string) => Promise<void>;
   handleRestoreUser: (userId: string) => Promise<void>;
@@ -111,7 +110,6 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
   });
 
-  // Centralized User Management Handlers
   const handleApproveUser = async (userId: string) => {
     await updateData('users', userId, { active: true, isDeleted: false, riderStatus: 'Offline' });
   };
@@ -132,102 +130,30 @@ const App: React.FC = () => {
     }
   };
 
-  // MAINTENANCE: Hard delete specific requested accounts to allow re-registration
+  // Profile and Auth Sync
   useEffect(() => {
-    if (allUsers.length === 0) return;
-    
-    const targets = ['emejorudoka@gmail.com', 'emejorudoka10@gmail.com'];
-    const usersToDelete = allUsers.filter(u => 
-      u.email && targets.includes(u.email.toLowerCase())
-    );
-
-    if (usersToDelete.length > 0) {
-      console.log(`Logistics Terminal: Wiping ${usersToDelete.length} accounts for fresh re-enrollment...`);
-      usersToDelete.forEach(async (user) => {
-        try {
-          await deleteDoc(doc(db, "users", user.id));
-          console.log(`Successfully purged: ${user.email}`);
-        } catch (err) {
-          console.error(`Failed to purge ${user.email}`, err);
-        }
-      });
-    }
-  }, [allUsers]);
-
-  // Rider Geolocation & Compliance Monitoring
-  useEffect(() => {
-    if (currentUser?.role !== Role.Rider) return;
-
-    let watchId: number;
-    
-    const updateLocationStatus = (status: 'Active' | 'Disabled') => {
-      updateData('users', currentUser.id, { locationStatus: status }).catch(() => {});
-    };
-
-    if ("geolocation" in navigator) {
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          updateData('users', currentUser.id, {
-            location: {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude
-            },
-            locationStatus: 'Active'
-          }).catch(console.error);
-        },
-        (error) => {
-          console.warn("Geolocation Error:", error);
-          if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
-            updateLocationStatus('Disabled');
-          }
-        },
-        { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
-      );
-    } else {
-      updateLocationStatus('Disabled');
-    }
-
-    return () => {
-      if (watchId) navigator.geolocation.clearWatch(watchId);
-    };
-  }, [currentUser?.id, currentUser?.role]);
-
-  // Main Auth and Profile Synchronization logic
-  useEffect(() => {
-    let profileUnsubscribe: (() => void) | null = null;
-
     const authUnsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (profileUnsubscribe) {
-        profileUnsubscribe();
-        profileUnsubscribe = null;
-      }
-
       if (firebaseUser) {
-        profileUnsubscribe = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
+        const profileUnsub = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
           if (docSnap.exists()) {
             const profile = { id: docSnap.id, ...docSnap.data() } as User;
-            if (profile.active !== false && !profile.isDeleted) {
+            if (profile.active && !profile.isDeleted) {
               setCurrentUser(profile);
             } else {
               setCurrentUser(null);
-              signOut(auth);
+              if (profile.active === false || profile.isDeleted) signOut(auth);
             }
-          } else {
-            setCurrentUser(null);
-            signOut(auth);
           }
         });
+        return () => profileUnsub();
       } else {
         setCurrentUser(null);
       }
     });
-
-    return () => {
-      authUnsubscribe();
-      if (profileUnsubscribe) profileUnsubscribe();
-    };
+    return () => authUnsubscribe();
   }, []);
 
+  // Settings Sync
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "settings", "global"), (doc) => {
       if (doc.exists()) {
@@ -239,70 +165,22 @@ const App: React.FC = () => {
     return () => unsub();
   }, []);
 
+  // Data Sync
   useEffect(() => {
-    const handleSyncError = (err: any) => {
-        setIsCloudConnected(false);
-        setCloudError(err.message || "Cloud sync unavailable.");
-    };
-
-    const unsubscribeUsers = syncCollection('users', 
-      (data) => {
-        setAllUsers(data as User[]);
-        setIsCloudConnected(true);
-        setCloudError(null);
-      },
-      handleSyncError
-    );
-
-    const unsubscribeDeliveries = syncCollection('deliveries', 
-      (data) => {
-        setDeliveries(data as Delivery[]);
-        setIsCloudConnected(true);
-        setCloudError(null);
-      },
-      handleSyncError
-    );
-
-    return () => {
-      unsubscribeUsers();
-      unsubscribeDeliveries();
-    };
+    const unsubscribeUsers = syncCollection('users', (data) => setAllUsers(data as User[]), (err) => { setIsCloudConnected(false); setCloudError(err.message); });
+    const unsubscribeDeliveries = syncCollection('deliveries', (data) => setDeliveries(data as Delivery[]), (err) => { setIsCloudConnected(false); setCloudError(err.message); });
+    return () => { unsubscribeUsers(); unsubscribeDeliveries(); };
   }, []);
 
+  // Theme Applier
   useEffect(() => {
-    if (!currentUser) return;
-    
-    const q = query(
-      collection(db, "notifications"),
-      where("userId", "==", currentUser.id),
-      orderBy("createdAt", "desc"),
-      limit(1)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "added") {
-          const data = change.doc.data();
-          const now = Date.now();
-          const docTime = data.createdAt?.toMillis() || 0;
-          if (now - docTime < 10000) {
-            setActiveNotification({ title: data.title, body: data.body });
-            setTimeout(() => setActiveNotification(null), 8000);
-          }
-        }
-      });
-    });
-
-    return () => unsubscribe();
-  }, [currentUser]);
-
-  useEffect(() => {
+    const root = window.document.documentElement;
     if (systemSettings.theme === 'dark') {
-      document.documentElement.classList.add('dark');
-      document.body.style.backgroundColor = '#020617';
+      root.classList.add('dark');
+      root.style.backgroundColor = '#020617';
     } else {
-      document.documentElement.classList.remove('dark');
-      document.body.style.backgroundColor = '#f8fafc';
+      root.classList.remove('dark');
+      root.style.backgroundColor = '#f8fafc';
     }
   }, [systemSettings.theme]);
 
@@ -339,37 +217,27 @@ const App: React.FC = () => {
 
   return (
     <AppContext.Provider value={contextValue}>
-      <div className="flex flex-col min-h-screen transition-all duration-700 ease-in-out bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100">
+      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 selection:bg-indigo-100 dark:selection:bg-indigo-900/40">
         <Header />
         
         {activeNotification && (
           <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-md animate-in slide-in-from-top-10 duration-500">
             <div className="bg-indigo-600 text-white p-5 rounded-2xl shadow-2xl border border-indigo-400 flex items-start gap-4">
-              <div className="p-2 bg-white/20 rounded-xl">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-              </div>
+              <div className="p-2 bg-white/20 rounded-xl"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
               <div className="flex-grow">
                 <h4 className="font-black uppercase tracking-widest text-[11px] mb-1">{activeNotification.title}</h4>
                 <p className="text-sm font-medium leading-tight">{activeNotification.body}</p>
               </div>
-              <button onClick={() => setActiveNotification(null)} className="p-1 hover:bg-white/10 rounded-lg">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
-              </button>
+              <button onClick={() => setActiveNotification(null)} className="p-1 hover:bg-white/10 rounded-lg"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
             </div>
           </div>
         )}
 
-        {!isCloudConnected && cloudError && (
-            <div className="bg-rose-600 text-white text-[10px] font-black uppercase tracking-[0.2em] py-2 text-center sticky top-20 z-50 shadow-2xl px-4 flex items-center justify-center gap-2 border-b border-rose-500">
-                <svg className="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                {cloudError}
-            </div>
-        )}
         <main className="flex-grow container mx-auto px-4 py-8 md:px-6 md:py-12">
           {!currentUser ? (
-            <div className="flex flex-col gap-16">
+            <div className="space-y-20 max-w-5xl mx-auto">
               <CustomerView />
-              <div className="flex justify-center items-center py-12 border-t border-slate-200 dark:border-slate-800 bg-slate-200/20 dark:bg-slate-900/20 -mx-4 md:-mx-8">
+              <div className="pt-20 border-t border-slate-200 dark:border-slate-800">
                 <Login />
               </div>
             </div>
