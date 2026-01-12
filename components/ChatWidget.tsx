@@ -3,8 +3,7 @@ import React, { useState, useContext, useEffect, useRef } from 'react';
 import { AppContext } from '../App';
 import { ChatBubbleIcon, MapIcon } from './icons';
 import { Role } from '../types';
-import { pushData, syncChat, db } from '../firebase';
-import { collection, deleteDoc, getDocs } from 'firebase/firestore';
+import { pushData, syncChat } from '../firebase';
 import { GoogleGenAI } from "@google/genai";
 
 const ChatWidget: React.FC = () => {
@@ -13,9 +12,7 @@ const ChatWidget: React.FC = () => {
   const [chatHistory, setChatHistory] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
   const [isAiThinking, setIsAiThinking] = useState(false);
-  const [pendingFile, setPendingFile] = useState<{data: string, name: string, type: string} | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = currentUser?.role === Role.Admin || currentUser?.role === Role.SuperAdmin;
   const isSuperAdmin = currentUser?.role === Role.SuperAdmin;
@@ -35,7 +32,7 @@ const ChatWidget: React.FC = () => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() && !pendingFile) return;
+    if (!inputText.trim()) return;
 
     const userText = inputText;
     const messagePayload = {
@@ -43,17 +40,15 @@ const ChatWidget: React.FC = () => {
         senderName: currentUser?.name || 'Guest Customer',
         text: userText,
         isAdmin: isAdmin,
-        attachment: pendingFile || null,
         timestamp: new Date()
     };
 
     try {
       await pushData('messages', messagePayload);
       setInputText('');
-      setPendingFile(null);
 
-      // Trigger AI Response if it's a question about locations or logistics
-      if (userText.toLowerCase().includes('where') || userText.toLowerCase().includes('location') || userText.toLowerCase().includes('near')) {
+      const triggers = ['where', 'location', 'near', 'map', 'asaba', 'find'];
+      if (triggers.some(t => userText.toLowerCase().includes(t))) {
         await triggerAiResponse(userText);
       }
     } catch (err) {
@@ -66,20 +61,21 @@ const ChatWidget: React.FC = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      // Get current location for grounding
-      let locationData = { latitude: 6.1957, longitude: 6.7296 }; // Default Asaba
+      let locationData = { latitude: 6.1957, longitude: 6.7296 }; // Asaba
       try {
         const pos = await new Promise<GeolocationPosition>((res, rej) => 
-          navigator.geolocation.getCurrentPosition(res, rej)
+          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 3000 })
         );
         locationData = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-      } catch (e) { console.debug("Using default coords"); }
+      } catch (e) { 
+        console.debug("Location precision unavailable, using center Asaba."); 
+      }
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-lite-latest",
         contents: prompt,
         config: {
-          systemInstruction: `You are the CLESTIN LOGISTICS AI dispatcher. Help users with logistics and location queries in Asaba, Nigeria. Use Google Maps grounding to provide accurate place information. Current business: ${systemSettings.businessName}.`,
+          systemInstruction: `You are the CLESTIN LOGISTICS AI dispatcher. Help users with logistics and location queries in Asaba, Nigeria. Current business: ${systemSettings.businessName}. Use Google Maps tools to provide accurate coordinates and links.`,
           tools: [{ googleMaps: {} }],
           toolConfig: {
             retrievalConfig: {
@@ -89,7 +85,7 @@ const ChatWidget: React.FC = () => {
         },
       });
 
-      const aiText = response.text || "I'm analyzing the map data for you...";
+      const aiText = response.text || "I'm checking the local fleet maps for you...";
       const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       
       const mapLinks = groundingChunks
@@ -122,13 +118,10 @@ const ChatWidget: React.FC = () => {
             <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/20 rounded-lg"><MapIcon className="w-4 h-4" /></div>
                 <div>
-                    <h3 className="font-bold font-outfit uppercase text-xs tracking-widest">Logistics Intelligence</h3>
+                    <h3 className="font-bold font-outfit uppercase text-xs tracking-widest">Fleet Intelligence</h3>
                     <p className="text-[10px] opacity-70">Google Maps Grounding Active</p>
                 </div>
             </div>
-            {isSuperAdmin && (
-                <button onClick={() => {}} className="bg-white/10 px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter hover:bg-rose-500 transition-colors">Clear</button>
-            )}
           </div>
           
           <div ref={scrollRef} className="flex-grow p-4 space-y-4 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950/50">
