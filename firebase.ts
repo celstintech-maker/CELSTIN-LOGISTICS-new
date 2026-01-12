@@ -40,8 +40,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// Modernized Firestore initialization with the new Cache API
-// This replaces enableIndexedDbPersistence() and handles multi-tab sync automatically.
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager()
@@ -101,6 +99,8 @@ export const pushData = async (collectionName: string, data: any) => {
 
 export const setProfileData = async (uid: string, data: any) => {
   try {
+    // We use setDoc with merge:true instead of updateDoc 
+    // to ensure the profile is created if it doesn't exist.
     await setDoc(doc(db, "users", uid), {
       ...data,
       updatedAt: serverTimestamp()
