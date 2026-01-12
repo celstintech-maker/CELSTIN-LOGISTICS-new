@@ -31,81 +31,57 @@ const Dashboard: React.FC = () => {
     return false;
   });
 
-  const hasActivity = userDeliveries.length > 0;
-
   const handleLocateOrder = (delivery: Delivery) => {
     setSelectedOrderForNav(delivery);
     setActiveTab('map');
   };
 
-  const canCloseShift = () => {
-    const hours = currentTime.getHours();
-    return hours >= 19; // 7 PM
-  };
-
   const handleToggleAvailability = async () => {
     if (!currentUser) return;
     const newStatus: RiderStatus = currentUser.riderStatus === 'Available' ? 'Offline' : 'Available';
-    
-    if (newStatus === 'Offline' && !canCloseShift()) {
-        alert("Operational Policy: Shifts can only be closed after 7:00 PM. Please stay available for dispatch until then.");
-        return;
-    }
-
     try {
         await updateData('users', currentUser.id, { riderStatus: newStatus });
     } catch (e) {
-        alert("Failed to sync availability status.");
+        alert("Sync failed.");
     }
   };
 
-  const settleVendor = (vendorId: string) => {
-    const vendor = allUsers.find(u => u.id === vendorId);
-    if (!vendor) return;
-    
-    const balance = vendor.commissionBalance || 0;
-    if (balance <= 0) return;
+  const tabs = [
+    { id: 'deliveries', label: 'Home', icon: <TruckIcon className="w-5 h-5" />, roles: [Role.SuperAdmin, Role.Admin, Role.Vendor, Role.Rider, Role.Customer] },
+    { id: 'map', label: 'Fleet', icon: <MapIcon className="w-5 h-5" />, roles: [Role.SuperAdmin, Role.Admin, Role.Rider] },
+    { id: 'manageStaff', label: 'Staff', icon: <UserCircleIcon className="w-5 h-5" />, roles: [Role.SuperAdmin, Role.Admin] },
+    { id: 'profile', label: 'Profile', icon: <UserCircleIcon className="w-5 h-5" />, roles: [Role.SuperAdmin, Role.Admin, Role.Vendor, Role.Rider, Role.Customer] },
+    { id: 'settings', label: 'Config', icon: <CogIcon className="w-5 h-5" />, roles: [Role.SuperAdmin] },
+  ];
 
-    if (window.confirm(`Initiate vault transfer of ₦${balance.toLocaleString()} to ${vendor.name}?`)) {
-      const updatedUsers = allUsers.map(u => {
-        if (u.id === vendorId) {
-          return {
-            ...u,
-            totalWithdrawn: (u.totalWithdrawn || 0) + balance,
-            commissionBalance: 0
-          };
-        }
-        return u;
-      });
-      setAllUsers(updatedUsers);
-    }
-  };
+  const availableTabs = tabs.filter(tab => tab.roles.includes(currentUser!.role));
 
   const renderContent = () => {
     switch (activeTab) {
       case 'deliveries':
         return (
-          <div className="space-y-8 animate-in fade-in duration-500">
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center gap-4 transition-colors">
-                    <div className="p-3 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl"><TruckIcon /></div>
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+             {/* Simple Stats Grid */}
+             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
+                <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4 transition-colors">
+                    <div className="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl"><TruckIcon className="w-5 h-5" /></div>
                     <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Your Deliveries</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{userDeliveries.length}</p>
+                        <p className="text-[10px] md:text-sm text-slate-500 font-bold uppercase tracking-widest">Total</p>
+                        <p className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">{userDeliveries.length}</p>
                     </div>
                 </div>
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center gap-4 transition-colors">
-                    <div className="p-3 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl"><ChartBarIcon /></div>
+                <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4 transition-colors">
+                    <div className="p-2 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl"><ChartBarIcon className="w-5 h-5" /></div>
                     <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Pending Tasks</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{userDeliveries.filter(d => d.status !== 'Delivered').length}</p>
+                        <p className="text-[10px] md:text-sm text-slate-500 font-bold uppercase tracking-widest">Live</p>
+                        <p className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">{userDeliveries.filter(d => d.status !== 'Delivered' && d.status !== 'Failed').length}</p>
                     </div>
                 </div>
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center gap-4 transition-colors">
-                    <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl"><UserCircleIcon /></div>
+                <div className="hidden lg:flex bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 items-center gap-4">
+                    <div className="p-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl"><UserCircleIcon className="w-5 h-5" /></div>
                     <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Success Rate</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                        <p className="text-sm text-slate-500 font-bold uppercase tracking-widest">Success</p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white">
                           {userDeliveries.length > 0 ? Math.round((userDeliveries.filter(d => d.status === 'Delivered').length / userDeliveries.length) * 100) : 0}%
                         </p>
                     </div>
@@ -114,124 +90,118 @@ const Dashboard: React.FC = () => {
 
             {[Role.SuperAdmin, Role.Admin, Role.Rider, Role.Vendor].includes(currentUser!.role) && <CreateDelivery />}
 
-            {!hasActivity ? (
-              <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-dashed border-slate-200 dark:border-slate-800 transition-all">
-                <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300 dark:text-slate-700">
-                  <TruckIcon className="w-10 h-10" />
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white font-outfit uppercase">System Clean & Ready</h3>
-                <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-2 text-sm">
-                  Welcome to your terminal, <span className="font-bold text-indigo-500">{currentUser?.name}</span>. Your dispatch history is currently empty.
-                </p>
-              </div>
-            ) : (
-              <>
+            <div className="space-y-4">
                 <DeliveriesTable 
-                  title="Live Queue" 
+                  title="Active Fleet Queue" 
                   deliveries={userDeliveries.filter(d => d.status !== 'Delivered' && d.status !== 'Failed')} 
                   onLocate={handleLocateOrder}
                 />
                 <DeliveriesTable 
-                  title="Archive" 
+                  title="Order Archive" 
                   deliveries={userDeliveries.filter(d => d.status === 'Delivered' || d.status === 'Failed')} 
                 />
-              </>
-            )}
+            </div>
           </div>
         );
-      case 'map':
-        return <MapView targetOrder={selectedOrderForNav} />;
-      case 'manageStaff':
-        return <ManageStaff />;
-      case 'financials':
-        return <VendorFinancials settleVendor={settleVendor} />;
-      case 'profile':
-        return <UserProfile />;
-      case 'settings':
-        return <Settings />;
-      default:
-        return null;
+      case 'map': return <MapView targetOrder={selectedOrderForNav} />;
+      case 'manageStaff': return <ManageStaff />;
+      case 'profile': return <UserProfile />;
+      case 'settings': return <Settings />;
+      case 'financials': return <VendorFinancials settleVendor={() => {}} />;
+      default: return null;
     }
   };
 
-  const tabs = [
-    { id: 'deliveries', label: 'Operations', icon: <TruckIcon className="w-5 h-5" />, roles: [Role.SuperAdmin, Role.Admin, Role.Vendor, Role.Rider, Role.Customer] },
-    { id: 'map', label: 'Live Fleet', icon: <MapIcon className="w-5 h-5" />, roles: [Role.SuperAdmin, Role.Admin, Role.Rider] },
-    { id: 'manageStaff', label: 'Workforce', icon: <UserCircleIcon className="w-5 h-5" />, roles: [Role.SuperAdmin, Role.Admin] },
-    { id: 'financials', label: 'Financials', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>, roles: [Role.SuperAdmin] },
-    { id: 'profile', label: 'Identity', icon: <UserCircleIcon className="w-5 h-5" />, roles: [Role.SuperAdmin, Role.Admin, Role.Vendor, Role.Rider, Role.Customer] },
-    { id: 'settings', label: 'Core Config', icon: <CogIcon className="w-5 h-5" />, roles: [Role.SuperAdmin] },
-  ];
-
-  const availableTabs = tabs.filter(tab => tab.roles.includes(currentUser!.role));
-
   return (
-    <div className="flex flex-col lg:flex-row gap-8">
-      <aside className="lg:w-64 flex-shrink-0">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 sticky top-24 transition-colors">
-           <nav className="space-y-1.5">
-            {availableTabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  if (tab.id !== 'map') setSelectedOrderForNav(null);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 ${
-                  activeTab === tab.id
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 translate-x-1'
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400'
-                }`}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </nav>
-          
-          {currentUser?.role === Role.Rider && (
-              <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-3 px-2">
-                      <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Shift Status</span>
-                      <span className={`w-2 h-2 rounded-full ${currentUser.riderStatus === 'Available' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
-                  </div>
-                  <button 
-                    onClick={handleToggleAvailability}
-                    className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
-                        currentUser.riderStatus === 'Available' 
-                        ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white' 
-                        : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20'
-                    }`}
-                  >
-                    {currentUser.riderStatus === 'Available' ? 'Go Offline' : 'Go Available'}
-                  </button>
-                  {!canCloseShift() && currentUser.riderStatus === 'Available' && (
-                      <p className="mt-2 text-[8px] text-center text-slate-400 font-bold uppercase tracking-tighter leading-tight">
-                        Locked until 19:00 (7 PM)
-                      </p>
-                  )}
-              </div>
-          )}
+    <div className="flex flex-col min-h-[calc(100vh-180px)]">
+      {/* Top Banner - Contextual */}
+      <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-2">
+        <div className="animate-in fade-in slide-in-from-left-4 duration-700">
+          <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight font-outfit uppercase">
+            {availableTabs.find(t => t.id === activeTab)?.label}
+          </h2>
+          <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-[0.2em] mt-0.5">
+            Logistics Command Center
+          </p>
         </div>
-      </aside>
-
-      <div className="flex-grow min-w-0">
-        <div className="mb-8 flex justify-between items-end">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight font-outfit uppercase">Logistics Command</h2>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">Welcome back, <span className="font-bold text-slate-700 dark:text-slate-300">{currentUser?.name}</span> • <span className="text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest text-[10px]">{currentUser?.role}</span></p>
-          </div>
-          {activeTab === 'map' && selectedOrderForNav && (
-            <button 
-              onClick={() => setSelectedOrderForNav(null)}
-              className="text-[10px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-500/10 px-3 py-1.5 rounded-lg transition-all"
-            >
-              Exit Navigation Mode
-            </button>
-          )}
-        </div>
-        {renderContent()}
+        
+        {currentUser?.role === Role.Rider && activeTab === 'deliveries' && (
+          <button 
+            onClick={handleToggleAvailability}
+            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                currentUser.riderStatus === 'Available' 
+                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' 
+                : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+            }`}
+          >
+            {currentUser.riderStatus === 'Available' ? 'Online' : 'Offline'}
+          </button>
+        )}
       </div>
+
+      <div className="flex flex-col lg:flex-row gap-8 pb-20 lg:pb-0">
+        {/* Desktop Sidebar */}
+        <aside className="hidden lg:block lg:w-64 flex-shrink-0">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 sticky top-24">
+             <nav className="space-y-1">
+              {availableTabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    if (tab.id !== 'map') setSelectedOrderForNav(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all duration-200 ${
+                    activeTab === tab.id
+                      ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/20 translate-x-1'
+                      : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600'
+                  }`}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+              {currentUser?.role === Role.SuperAdmin && (
+                <button
+                  onClick={() => setActiveTab('financials')}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all duration-200 ${
+                    activeTab === 'financials' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span>Financials</span>
+                </button>
+              )}
+            </nav>
+          </div>
+        </aside>
+
+        {/* Main Workspace */}
+        <div className="flex-grow min-w-0">
+          {renderContent()}
+        </div>
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-4 py-2 z-[60] flex justify-around items-center">
+        {availableTabs.slice(0, 5).map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              setActiveTab(tab.id);
+              if (tab.id !== 'map') setSelectedOrderForNav(null);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className={`flex flex-col items-center gap-1 p-2 transition-all ${
+              activeTab === tab.id ? 'text-indigo-600 dark:text-indigo-400 scale-110' : 'text-slate-400'
+            }`}
+          >
+            {tab.icon}
+            <span className="text-[9px] font-black uppercase tracking-tighter">{tab.label}</span>
+            {activeTab === tab.id && <span className="w-1 h-1 rounded-full bg-current"></span>}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 };
