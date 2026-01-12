@@ -18,7 +18,9 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
   const routingControlRef = useRef<any | null>(null);
   const layersRef = useRef<{ [key: string]: any }>({});
   const markersMapRef = useRef<Map<string, any>>(new Map());
+  
   const [activeRiders, setActiveRiders] = useState<User[]>([]);
+  const [selectedRider, setSelectedRider] = useState<User | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [mapMode, setMapMode] = useState<'logistics' | 'satellite'>('logistics');
   const [routeStats, setRouteStats] = useState<{distance: string, time: string} | null>(null);
@@ -83,7 +85,6 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         L.latLng(dropoffCoords.lat, dropoffCoords.lng)
       ];
 
-      // Add rider to route if assigned and has location
       if (targetOrder.rider?.id) {
         const assignedRider = activeRiders.find(r => r.id === targetOrder.rider?.id);
         if (assignedRider?.location) {
@@ -173,6 +174,8 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       layersRef.current.logistics.addTo(map);
       L.control.zoom({ position: 'bottomright' }).addTo(map);
       mapRef.current = map;
+      
+      map.on('click', () => setSelectedRider(null));
     }
     
     return () => {
@@ -182,30 +185,6 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       }
     };
   }, [systemSettings.theme]);
-
-  const generatePopupContent = (rider: User) => {
-    const isOff = rider.locationStatus === 'Disabled';
-    return `
-      <div class="p-4 text-center min-w-[200px] animate-in fade-in duration-300">
-        <p class="font-black text-[11px] uppercase tracking-[0.1em] text-indigo-600 mb-1 leading-none">${rider.name}</p>
-        <div class="flex items-center justify-center gap-1.5 mb-3 border-b border-slate-100 dark:border-slate-800 pb-2">
-          <span class="w-2 h-2 rounded-full ${isOff ? 'bg-rose-500' : (rider.riderStatus === 'Available' ? 'bg-emerald-500' : 'bg-amber-500')} ${isOff ? '' : 'animate-pulse'}"></span>
-          <span class="text-[10px] font-black ${isOff ? 'text-rose-500' : 'text-slate-500'} uppercase tracking-tighter">
-            ${isOff ? 'SIGNAL LOST' : rider.riderStatus}
-          </span>
-        </div>
-        <div class="${isOff ? 'bg-rose-500/10 border-rose-200' : 'bg-indigo-600 border-indigo-400'} p-3 rounded-xl border shadow-xl mb-2">
-           <p class="text-[10px] font-black ${isOff ? 'text-rose-600' : 'text-white'} uppercase leading-tight italic">
-            📍 ${isOff ? 'LAST KNOWN: ' + (rider.vehicle || 'Unknown') : (rider.vehicle || 'Tracing Route...')}
-           </p>
-        </div>
-        <div class="flex flex-col gap-0.5 opacity-60 text-slate-400">
-          <p class="text-[7px] font-mono tracking-tighter uppercase">${isOff ? 'Last Signal Timestamp' : 'Live Telemetry'}</p>
-          <p class="text-[7px] font-mono tracking-tighter">${rider.location?.lat.toFixed(6)}, ${rider.location?.lng.toFixed(6)}</p>
-        </div>
-      </div>
-    `;
-  };
 
   useEffect(() => {
     const ridersQuery = query(
@@ -251,13 +230,17 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
           const marker = markersMapRef.current.get(rider.id);
           marker.setLatLng(position);
           marker.setIcon(riderIcon);
-          if (marker.isPopupOpen()) marker.getPopup().setContent(generatePopupContent(rider));
+          marker.off('click').on('click', (e: any) => {
+            L.DomEvent.stopPropagation(e);
+            setSelectedRider(rider);
+            centerMap(rider.location!, 17);
+          });
         } else {
           const marker = L.marker(position, { icon: riderIcon }).addTo(map);
-          marker.bindPopup(generatePopupContent(rider), { 
-            closeButton: false, 
-            offset: [0, -5], 
-            className: 'custom-fleet-popup' 
+          marker.on('click', (e: any) => {
+            L.DomEvent.stopPropagation(e);
+            setSelectedRider(rider);
+            centerMap(rider.location!, 17);
           });
           markersMapRef.current.set(rider.id, marker);
         }
@@ -276,11 +259,70 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
     return () => unsubscribe();
   }, []);
 
+  const handleRiderCardClick = (rider: User) => {
+    if (rider.location) {
+      centerMap(rider.location, 18);
+      setSelectedRider(rider);
+    }
+  };
+
   return (
     <div className="h-full w-full flex flex-col gap-4 animate-in fade-in duration-700">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden relative h-[500px] md:h-[650px]">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden relative h-[550px] md:h-[700px]">
         <div ref={mapContainerRef} className="h-full w-full z-10" />
         
+        {/* Floating Rider Detail Panel */}
+        {selectedRider && (
+          <div className="absolute top-6 left-6 right-6 md:right-auto md:w-80 z-[500] animate-in slide-in-from-left-4 duration-500">
+            <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl border border-white/20 dark:border-slate-800 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.4)] overflow-hidden">
+               <div className="relative h-24 bg-indigo-600">
+                  <button 
+                    onClick={() => setSelectedRider(null)}
+                    className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-all"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                  <div className="absolute -bottom-10 left-6">
+                     <div className={`w-20 h-20 rounded-2xl border-4 border-white dark:border-slate-900 overflow-hidden shadow-xl bg-slate-200 ${selectedRider.locationStatus === 'Disabled' ? 'grayscale' : ''}`}>
+                        {selectedRider.profilePicture ? (
+                          <img src={selectedRider.profilePicture} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-indigo-500 text-white font-black text-2xl">{selectedRider.name.charAt(0)}</div>
+                        )}
+                     </div>
+                  </div>
+               </div>
+               <div className="pt-12 pb-6 px-6">
+                  <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{selectedRider.name}</h4>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`w-2 h-2 rounded-full ${selectedRider.locationStatus === 'Disabled' ? 'bg-rose-500' : (selectedRider.riderStatus === 'Available' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-pulse')}`}></span>
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{selectedRider.locationStatus === 'Disabled' ? 'SIGNAL TERMINATED' : selectedRider.riderStatus}</span>
+                  </div>
+
+                  <div className="mt-6 space-y-4">
+                     <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Current Coordinates</p>
+                        <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300 italic">
+                          📍 {selectedRider.vehicle || 'Tracing Address...'}
+                        </p>
+                     </div>
+
+                     <div className="grid grid-cols-2 gap-3">
+                        <a href={`tel:${selectedRider.phone}`} className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20">
+                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                           Voice Call
+                        </a>
+                        <button onClick={() => centerMap(selectedRider.location!, 18)} className="flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-slate-200 dark:border-slate-700">
+                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                           Focus Node
+                        </button>
+                     </div>
+                  </div>
+               </div>
+            </div>
+          </div>
+        )}
+
         {/* Route Stats Overlay */}
         {routeStats && (
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[400] flex gap-3 animate-in slide-in-from-top-4">
@@ -298,7 +340,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
           </div>
         )}
 
-        <div className="absolute top-6 left-6 z-[400] flex flex-col gap-3">
+        <div className="absolute top-6 right-6 z-[400] flex flex-col gap-3">
           <button onClick={locateMe} disabled={isLocating} className="p-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 hover:scale-110 active:scale-95 transition-all text-indigo-600">
             {isLocating ? <svg className="animate-spin w-6 h-6" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>}
           </button>
@@ -331,22 +373,31 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         </div>
       </div>
 
+      {/* Fleet Identity Ribbon */}
       <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto no-scrollbar">
         <div className="flex gap-4 min-w-max">
           {activeRiders.map(rider => (
-            <button key={rider.id} onClick={() => rider.location && centerMap(rider.location, 18)} className={`flex items-center gap-3 p-4 rounded-2xl border transition-all shrink-0 hover:shadow-lg group relative ${rider.locationStatus === 'Disabled' ? 'bg-rose-50 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/40' : 'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800 hover:border-indigo-500'}`}>
-              <div className={`w-12 h-12 rounded-full border-2 overflow-hidden shadow-sm transition-colors ${rider.locationStatus === 'Disabled' ? 'border-rose-400 grayscale' : 'border-white dark:border-slate-800 group-hover:border-indigo-500'}`}>
-                {rider.profilePicture ? <img src={rider.profilePicture} className="w-full h-full object-cover" /> : <div className="bg-indigo-600 text-white w-full h-full flex items-center justify-center font-bold text-xs">{rider.name.charAt(0)}</div>}
+            <button 
+                key={rider.id} 
+                onClick={() => handleRiderCardClick(rider)} 
+                className={`flex items-center gap-3 p-4 rounded-2xl border transition-all shrink-0 hover:shadow-lg group relative ${selectedRider?.id === rider.id ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 ring-2 ring-indigo-500/20' : 'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800 hover:border-indigo-400'} ${rider.locationStatus === 'Disabled' ? 'opacity-60 grayscale' : ''}`}
+            >
+              <div className={`w-14 h-14 rounded-2xl border-2 overflow-hidden shadow-sm transition-all ${rider.locationStatus === 'Disabled' ? 'border-rose-400' : (rider.riderStatus === 'Available' ? 'border-emerald-400' : 'border-amber-400')} group-hover:scale-105`}>
+                {rider.profilePicture ? (
+                  <img src={rider.profilePicture} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="bg-slate-200 dark:bg-slate-800 w-full h-full flex items-center justify-center font-black text-indigo-600 text-lg uppercase">{rider.name.charAt(0)}</div>
+                )}
               </div>
               <div className="text-left z-10 max-w-[220px]">
                 <p className="text-[11px] font-black uppercase text-slate-900 dark:text-white truncate tracking-tight">{rider.name}</p>
                 <div className="flex flex-col mt-1">
                   <span className={`text-[9px] font-black uppercase tracking-tighter mb-0.5 italic truncate px-2 py-0.5 rounded-md ${rider.locationStatus === 'Disabled' ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400' : 'bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400'}`}>
-                    {rider.locationStatus === 'Disabled' ? 'SIGNAL TERMINATED' : (rider.vehicle || 'On Route')}
+                    {rider.locationStatus === 'Disabled' ? 'OFFLINE' : (rider.vehicle || 'On Route')}
                   </span>
                   <div className="flex items-center gap-1.5 mt-1">
                     <span className={`w-1.5 h-1.5 rounded-full ${rider.locationStatus === 'Disabled' ? 'bg-rose-500' : (rider.riderStatus === 'Available' ? 'bg-emerald-500' : 'bg-amber-500')}`}></span>
-                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{rider.locationStatus === 'Disabled' ? 'OFFLINE' : rider.riderStatus}</span>
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{rider.riderStatus}</span>
                   </div>
                 </div>
               </div>
@@ -356,7 +407,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       </div>
 
       <style>{`
-        .rider-marker-v4 { display: flex; align-items: center; justify-content: center; position: relative; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .rider-marker-v4 { display: flex; align-items: center; justify-content: center; position: relative; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
         .signal-off .marker-body { filter: grayscale(0.8) brightness(0.7); border-color: #f43f5e; opacity: 0.8; }
         .signal-off .marker-pulse { display: none; }
         .marker-body { width: 44px; height: 44px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3.5px solid white; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 5; }
@@ -366,9 +417,6 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         .marker-pulse { position: absolute; width: 50px; height: 50px; border-radius: 50%; opacity: 0.3; animation: marker-pulse-v4 2.5s infinite ease-out; z-index: 1; }
         .marker-shadow { position: absolute; width: 24px; height: 10px; background: rgba(0,0,0,0.4); border-radius: 50%; bottom: -10px; filter: blur(4px); z-index: 0; }
         @keyframes marker-pulse-v4 { 0% { transform: scale(0.5); opacity: 0.8; } 100% { transform: scale(2.2); opacity: 0; } }
-        .custom-fleet-popup .leaflet-popup-content-wrapper { border-radius: 24px; background: rgba(255,255,255,0.98); box-shadow: 0 20px 50px rgba(0,0,0,0.3); padding: 0; overflow: hidden; border: 1px solid rgba(255,255,255,0.2); }
-        .dark .custom-fleet-popup .leaflet-popup-content-wrapper { background: #0f172a; color: white; border: 1px solid rgba(255,255,255,0.1); }
-        .custom-fleet-popup .leaflet-popup-content { margin: 0; }
         .leaflet-marker-icon { transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), top 0.5s cubic-bezier(0.4, 0, 0.2, 1), left 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
       `}</style>
     </div>
