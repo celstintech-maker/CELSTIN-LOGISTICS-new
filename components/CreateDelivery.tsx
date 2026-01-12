@@ -25,7 +25,6 @@ const CreateDelivery: React.FC = () => {
             setEstimatedPrice(price);
 
             // Calculate estimated delivery time (minutes)
-            // Bike: 2.5 min/km | Truck: 4 min/km | Public: 6 min/km
             const modeMultiplier = transportMode === 'Bike' ? 2.5 : transportMode === 'Truck' ? 4 : 6;
             setEstimatedMinutes(Math.round(estimatedKm * modeMultiplier));
         } else {
@@ -66,7 +65,7 @@ const CreateDelivery: React.FC = () => {
             setOrigin('');
             setDestination('');
             setIsExpanded(false);
-            alert(`Order broadcast successful. Total: ₦${estimatedPrice.toLocaleString()}`);
+            alert(`Order logged. Please transfer ₦${estimatedPrice.toLocaleString()} to ${systemSettings.paymentAccountNumber} for verification.`);
         } catch (error: any) {
             console.error("Broadcast Error Details:", error);
             alert(`Error broadcasting order: ${error.message || 'Connection failed.'}`);
@@ -169,6 +168,27 @@ const CreateDelivery: React.FC = () => {
                  <div className="md:col-span-2">
                     <label htmlFor="packageNotes" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Item Description</label>
                     <textarea name="packageNotes" id="packageNotes" rows={3} className="form-input-v2" placeholder="What are we delivering?"></textarea>
+                </div>
+
+                <div className="md:col-span-2 bg-slate-50 dark:bg-slate-950 p-6 rounded-2xl border border-dashed border-indigo-200 dark:border-indigo-900/40">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
+                    <p className="text-[11px] font-black text-indigo-500 uppercase tracking-widest">Official Settlement Details</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Bank</p>
+                      <p className="text-sm font-bold text-slate-800 dark:text-white">{systemSettings.paymentBank}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Account #</p>
+                      <p className="text-sm font-black text-indigo-600 dark:text-indigo-400 font-mono tracking-tighter">{systemSettings.paymentAccountNumber}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Account Name</p>
+                      <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{systemSettings.paymentAccountName}</p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="md:col-span-2 flex flex-col sm:flex-row justify-between items-center gap-6 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
