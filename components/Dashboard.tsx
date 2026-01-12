@@ -34,18 +34,23 @@ const Dashboard: React.FC = () => {
 
   const getStreetAndLandmark = async (lat: number, lng: number) => {
     try {
+      // Fetching high-detail address data
       const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
       const data = await response.json();
       const addr = data.address;
-      const street = addr.road || addr.suburb || addr.neighbourhood || 'Active Route';
-      const landmark = data.display_name.split(',')[0]; // Often contains the specific building or landmark
       
-      // If the display name starts with a number or is just the street, try to find a better landmark
-      const finalLocation = landmark !== street ? `${street} (Near ${landmark})` : street;
-      return finalLocation;
+      // Attempt to find a recognizable landmark in the data
+      const landmark = addr.amenity || addr.building || addr.shop || addr.tourism || addr.historic || addr.office || addr.leisure || data.name;
+      const street = addr.road || addr.suburb || addr.neighbourhood || 'Asaba Route';
+      
+      // Construct a human-readable live location string
+      if (landmark && landmark !== street && !street.includes(landmark)) {
+        return `${street} (Near ${landmark})`;
+      }
+      return street;
     } catch (error) {
       console.error("Geocoding error", error);
-      return 'Tracking Live...';
+      return 'Tracking Fleet...';
     }
   };
 
@@ -61,12 +66,11 @@ const Dashboard: React.FC = () => {
           
           await handleUpdateUser(currentUser.id, { 
             location: { lat: latitude, lng: longitude },
-            vehicle: locationString, // Sync location string to vehicle field for easy dashboard access
+            vehicle: locationString, // Sync location string for global broadcast
             locationStatus: 'Active'
           });
         },
         (err) => console.error("Watch error", err),
-        /* Fix: 'distanceFilter' is not a valid property in PositionOptions for native Geolocation API */
         { enableHighAccuracy: true }
       );
     }
@@ -99,7 +103,7 @@ const Dashboard: React.FC = () => {
       await handleUpdateUser(currentUser.id, { 
         riderStatus: 'Offline',
         locationStatus: 'Disabled',
-        vehicle: '' // Clear location string on logout
+        vehicle: '' 
       });
       setCurrentStreet('');
     }
@@ -191,11 +195,11 @@ const Dashboard: React.FC = () => {
                     <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 mb-1">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                       <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
-                        Live Tracking Active
+                        Broadcasting Movements
                       </span>
                     </div>
                     {currentUser.vehicle && (
-                      <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase italic bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1 rounded-lg border border-indigo-100 dark:border-indigo-800">
+                      <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase italic bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-800 shadow-sm animate-in fade-in slide-in-from-right-2">
                         📍 {currentUser.vehicle}
                       </p>
                     )}
@@ -205,7 +209,7 @@ const Dashboard: React.FC = () => {
                   onClick={handleClockToggle}
                   className={`w-full md:w-auto px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all transform active:scale-95 shadow-lg ${
                       currentUser.riderStatus === 'Available' 
-                      ? 'bg-emerald-600 text-white shadow-emerald-500/20 hover:bg-emerald-700' 
+                      ? 'bg-rose-600 text-white shadow-rose-500/20 hover:bg-rose-700' 
                       : 'bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700'
                   }`}
                 >

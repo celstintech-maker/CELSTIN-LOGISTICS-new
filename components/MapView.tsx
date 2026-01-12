@@ -81,6 +81,30 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
     }
   }, [targetOrder]);
 
+  const generatePopupContent = (rider: User) => `
+    <div class="p-4 text-center min-w-[180px] animate-in fade-in duration-300">
+      <p class="font-black text-[10px] uppercase tracking-widest text-indigo-600 mb-1 leading-none">${rider.name}</p>
+      <div class="flex items-center justify-center gap-1.5 mb-3">
+        <span class="w-1.5 h-1.5 rounded-full ${rider.riderStatus === 'Available' ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse"></span>
+        <span class="text-[9px] font-black text-slate-500 uppercase tracking-tighter">${rider.riderStatus}</span>
+      </div>
+      ${rider.vehicle ? `
+        <div class="bg-indigo-600 p-2.5 rounded-xl border border-indigo-400/20 shadow-lg shadow-indigo-600/20 mb-2">
+           <p class="text-[9px] font-black text-white uppercase leading-tight italic">
+            ${rider.vehicle}
+           </p>
+        </div>
+      ` : `
+        <div class="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg mb-2">
+          <p class="text-[8px] font-bold text-slate-400 uppercase">Resolving Landmark...</p>
+        </div>
+      `}
+      <p class="text-[7px] text-slate-400 font-mono tracking-tighter opacity-60">
+        LOC: ${rider.location?.lat.toFixed(6)}, ${rider.location?.lng.toFixed(6)}
+      </p>
+    </div>
+  `;
+
   useEffect(() => {
     const ridersQuery = query(
       collection(db, 'users'), 
@@ -112,10 +136,8 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
 
         if (markersMapRef.current.has(rider.id)) {
           const marker = markersMapRef.current.get(rider.id);
-          // Use smooth slide animation if supported by a plugin or simple setLatLng
           marker.setLatLng(position);
           
-          // Update popup content dynamically in case location string changed
           if (marker.getPopup()) {
              marker.getPopup().setContent(generatePopupContent(rider));
           }
@@ -131,12 +153,16 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
                    </div>`,
             className: '',
             iconSize: [44, 44],
-            iconAnchor: [22, 44], // Bottom center anchor for realistic pinning
+            iconAnchor: [22, 44],
             popupAnchor: [0, -44]
           });
 
           const marker = L.marker(position, { icon: riderIcon }).addTo(map);
-          marker.bindPopup(generatePopupContent(rider), { closeButton: false, offset: [0, -5], className: 'custom-fleet-popup' });
+          marker.bindPopup(generatePopupContent(rider), { 
+            closeButton: false, 
+            offset: [0, -5], 
+            className: 'custom-fleet-popup' 
+          });
           markersMapRef.current.set(rider.id, marker);
         }
       });
@@ -152,22 +178,6 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
 
     return () => unsubscribe();
   }, []);
-
-  const generatePopupContent = (rider: User) => `
-    <div class="p-3 text-center min-w-[160px] animate-in fade-in duration-300">
-      <p class="font-black text-[10px] uppercase tracking-widest text-indigo-600 mb-1 leading-none">${rider.name}</p>
-      <div class="flex items-center justify-center gap-1.5 mb-2">
-        <span class="w-1.5 h-1.5 rounded-full ${rider.riderStatus === 'Available' ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse"></span>
-        <span class="text-[9px] font-black text-slate-500 uppercase tracking-tighter">${rider.riderStatus}</span>
-      </div>
-      ${rider.vehicle ? `
-        <div class="bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-lg border border-indigo-100 dark:border-indigo-800 mb-2">
-           <p class="text-[8px] font-black text-indigo-600 dark:text-indigo-400 uppercase leading-tight italic">📍 ${rider.vehicle}</p>
-        </div>
-      ` : ''}
-      <p class="text-[7px] text-slate-400 font-mono tracking-tighter opacity-60">GPS: ${rider.location?.lat.toFixed(5)}, ${rider.location?.lng.toFixed(5)}</p>
-    </div>
-  `;
 
   return (
     <div className="h-full w-full flex flex-col gap-4 animate-in fade-in duration-700">
@@ -207,8 +217,8 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
 
       <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto no-scrollbar">
         <div className="flex gap-4 min-w-max">
-          {activeRiders.length === 0 && <p className="text-[10px] text-slate-400 font-bold uppercase py-4">Scanning for active fleet nodes...</p>}
-          {activeRiders.map(rider => (
+          {activeRiders.filter(r => r.locationStatus === 'Active').length === 0 && <p className="text-[10px] text-slate-400 font-bold uppercase py-4">Scanning for active fleet nodes...</p>}
+          {activeRiders.filter(r => r.locationStatus === 'Active').map(rider => (
             <button 
               key={rider.id}
               onClick={() => rider.location && centerMap(rider.location, 18)}
@@ -217,15 +227,15 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
               <div className="w-12 h-12 rounded-full border-2 border-white dark:border-slate-800 overflow-hidden shadow-sm group-hover:border-indigo-500 transition-colors z-10">
                 {rider.profilePicture ? <img src={rider.profilePicture} className="w-full h-full object-cover" /> : <div className="bg-indigo-600 text-white w-full h-full flex items-center justify-center font-bold text-xs">{rider.name.charAt(0)}</div>}
               </div>
-              <div className="text-left z-10">
-                <p className="text-[10px] font-black uppercase text-slate-900 dark:text-white truncate max-w-[140px]">{rider.name}</p>
+              <div className="text-left z-10 max-w-[180px]">
+                <p className="text-[10px] font-black uppercase text-slate-900 dark:text-white truncate">{rider.name}</p>
                 <div className="flex flex-col mt-0.5">
-                  <span className="text-[8px] font-black text-indigo-500 uppercase tracking-tighter mb-0.5 italic max-w-[140px] truncate">
-                    {rider.vehicle || 'Unknown Sector'}
+                  <span className="text-[8px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter mb-0.5 italic truncate">
+                    📍 ${rider.vehicle || 'Resolving Street...'}
                   </span>
                   <div className="flex items-center gap-1">
                     <span className={`w-1 h-1 rounded-full ${rider.riderStatus === 'Available' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
-                    <span className="text-[8px] font-bold text-slate-500 uppercase">{rider.riderStatus}</span>
+                    <span className="text-[8px] font-bold text-slate-500 uppercase">${rider.riderStatus}</span>
                   </div>
                 </div>
               </div>
