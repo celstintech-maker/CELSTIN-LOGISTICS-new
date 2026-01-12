@@ -143,7 +143,7 @@ const Login: React.FC = () => {
     <div className="bg-white dark:bg-slate-900 p-8 md:p-10 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md mx-auto relative overflow-hidden animate-in fade-in slide-in-from-bottom-4">
       <div className="text-center mb-8">
         <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white uppercase tracking-tight font-outfit">
-          {view === 'login' ? 'Portal Access' : view === 'register' ? 'New Enrollment' : 'Identity Recovery'}
+          {view === 'login' ? 'Login' : view === 'register' ? 'New Enrollment' : 'Identity Recovery'}
         </h2>
         <div className="h-1 w-12 bg-indigo-500 mx-auto mt-2 rounded-full"></div>
       </div>
