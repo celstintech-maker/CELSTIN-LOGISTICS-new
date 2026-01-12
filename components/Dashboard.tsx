@@ -18,6 +18,7 @@ const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('deliveries');
   const [selectedOrderForNav, setSelectedOrderForNav] = useState<Delivery | null>(null);
   const [currentStreet, setCurrentStreet] = useState<string>('');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const userDeliveries = useMemo(() => deliveries.filter(d => {
     if (currentUser?.role === Role.SuperAdmin || currentUser?.role === Role.Admin) return true;
@@ -51,6 +52,35 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // Manual Trigger for Location Broadcast
+  const handleManualSync = async () => {
+    if (!currentUser || isSyncing) return;
+    setIsSyncing(true);
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const exactAddress = await getStreetAndLandmark(latitude, longitude);
+        
+        setCurrentStreet(exactAddress);
+        
+        await handleUpdateUser(currentUser.id, { 
+          location: { lat: latitude, lng: longitude },
+          vehicle: exactAddress,
+          locationStatus: 'Active'
+        });
+        
+        setTimeout(() => setIsSyncing(false), 800);
+      },
+      (err) => {
+        console.error("Manual Sync Error:", err);
+        setIsSyncing(false);
+        alert("Unable to fetch precise signal. Please check GPS settings.");
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
   // Continuous tracking effect for active riders
   useEffect(() => {
     let watchId: number | null = null;
@@ -73,14 +103,11 @@ const Dashboard: React.FC = () => {
           },
           (err) => {
             console.error("Tracking Error:", err);
-            if (err.code === 1) {
-              alert("GPS Permission Denied. Active tracking stopped.");
-            }
           },
           { 
             enableHighAccuracy: true,
-            maximumAge: 1000,
-            timeout: 10000
+            maximumAge: 5000,
+            timeout: 15000
           }
         );
       }
@@ -213,9 +240,25 @@ const Dashboard: React.FC = () => {
                       </span>
                     </div>
                     {currentUser.vehicle && (
-                      <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase italic bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-800 shadow-sm animate-in fade-in slide-in-from-right-2">
-                        📍 {currentUser.vehicle}
-                      </p>
+                      <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
+                        <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase italic bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-800 shadow-sm">
+                          📍 {currentUser.vehicle}
+                        </p>
+                        <button 
+                          onClick={handleManualSync}
+                          disabled={isSyncing}
+                          className={`p-1.5 rounded-lg border transition-all ${
+                            isSyncing 
+                            ? 'bg-emerald-500 text-white border-emerald-400 animate-pulse' 
+                            : 'bg-white dark:bg-slate-800 text-indigo-600 border-indigo-100 dark:border-slate-700 hover:scale-110 active:scale-95'
+                          }`}
+                          title="Force Signal Sync"
+                        >
+                          <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
