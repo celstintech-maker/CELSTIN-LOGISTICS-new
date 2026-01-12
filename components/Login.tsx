@@ -73,6 +73,7 @@ const Login: React.FC = () => {
     const isSuperAdminEmail = trimmedEmail === 'support@celstin.com';
 
     try {
+      // 1. Create the Auth record
       const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       
       const newUserProfile: User = {
@@ -89,30 +90,35 @@ const Login: React.FC = () => {
         riderStatus: 'Offline'
       };
 
-      await setProfileData(userCredential.user.uid, newUserProfile);
-      
+      // 2. Optimistically update local UI for non-admins to prevent "stuck" feeling
       if (!isSuperAdminEmail) {
-        // Sign out immediately so the App's auth listener doesn't try to log them into a pending account
+        // Fire and forget the profile creation, we just need to confirm it started
+        setProfileData(userCredential.user.uid, newUserProfile).catch(err => {
+          console.error("Delayed profile write failed:", err);
+        });
+        
+        // Immediate cleanup and success view
         await signOut(auth);
+        setIsLoading(false);
         setRegistrationSuccess(true);
-        // Clean up inputs
         setEmailInput('');
         setPassword('');
         setName('');
         setPhone('');
       } else {
+        // Super Admins need to wait for profile to ensure immediate dashboard access
+        await setProfileData(userCredential.user.uid, newUserProfile);
         setCurrentUser(newUserProfile);
+        setIsLoading(false);
       }
     } catch (error: any) {
       console.error("Registration Error:", error);
+      setIsLoading(false);
       let errorMsg = 'Registration failed. Check connection.';
       if (error.code === 'auth/email-already-in-use') errorMsg = 'This email is already registered.';
       if (error.code === 'auth/invalid-email') errorMsg = 'Please enter a valid email address.';
       if (error.code === 'auth/weak-password') errorMsg = 'Password must be at least 6 characters.';
-      if (error.code === 'auth/network-request-failed') errorMsg = 'Network error. Check your connection.';
       setMessage({ text: errorMsg, type: 'error' });
-    } finally {
-      setIsLoading(false);
     }
   };
 
