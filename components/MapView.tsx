@@ -17,28 +17,38 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
   const mapRef = useRef<any | null>(null); 
   const markersMapRef = useRef<Map<string, any>>(new Map());
   const [activeRiders, setActiveRiders] = useState<User[]>([]);
+  const [isLocating, setIsLocating] = useState(false);
 
-  // Initialize Map Instance with High-Detail Tiles
+  const centerMap = (coords: {lat: number, lng: number}, zoom = 15) => {
+    if (mapRef.current) {
+      mapRef.current.flyTo([coords.lat, coords.lng], zoom, { duration: 1.5, easeLinearity: 0.25 });
+    }
+  };
+
+  const locateMe = () => {
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        centerMap({ lat: pos.coords.latitude, lng: pos.coords.longitude }, 17);
+        setIsLocating(false);
+      },
+      () => setIsLocating(false),
+      { enableHighAccuracy: true }
+    );
+  };
+
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
       const map = L.map(mapContainerRef.current, {
         zoomControl: false,
         preferCanvas: true,
-        maxZoom: 20
-      }).setView([6.1957, 6.7296], 14);
+        fadeAnimation: true
+      }).setView([6.1957, 6.7296], 13);
 
-      // Using OSM France HOT tiles which provide superior POI density and building footprints in African urban hubs like Asaba
-      const osmHOT = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+      L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
         maxZoom: 20,
-        attribution: '&copy; OpenStreetMap contributors, Landmarks via HOT'
-      });
-
-      // Optional: Terrain/Landmark layer for detailed street navigation
-      const osmStreets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19
-      });
-
-      osmHOT.addTo(map);
+        attribution: '&copy; CLESTIN FLEET INTEL'
+      }).addTo(map);
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
       mapRef.current = map;
@@ -52,62 +62,27 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
     };
   }, []);
 
-  // Enhanced Landmark/Navigation View
+  // Handle target order centering
   useEffect(() => {
-    if (mapRef.current && targetOrder && currentUser?.location) {
-      const map = mapRef.current;
-      const riderPos = [currentUser.location.lat, currentUser.location.lng];
-      
-      // Fly to highly zoomed view to see building footprints
-      map.flyTo(riderPos, 18, { duration: 2.5 });
-      
-      const destIcon = L.divIcon({
-        html: `<div class="dest-marker animate-bounce">
-                <div class="dest-pin shadow-2xl"></div>
-                <div class="dest-label-container shadow-xl">
-                    <span class="dest-label-text">${targetOrder.dropoffAddress.split(',')[0]}</span>
-                </div>
-               </div>`,
-        className: '',
-        iconSize: [40, 40],
-        iconAnchor: [20, 40],
-      });
-      
-      // Simulate/approximate landmark position for UI feedback (in real app, use geocoded coords)
-      const landmarkPos: [number, number] = [currentUser.location.lat + 0.0015, currentUser.location.lng + 0.0015];
-      const destMarker = L.marker(landmarkPos, { icon: destIcon }).addTo(map);
-      
-      destMarker.bindPopup(`
-        <div class="p-3 font-outfit min-w-[200px]">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-            <p class="text-[10px] font-black uppercase text-rose-500 tracking-widest">Active Landmark Target</p>
-          </div>
-          <p class="font-bold text-slate-900 dark:text-white text-sm leading-tight mb-2">${targetOrder.dropoffAddress}</p>
-          <div class="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
-            <p class="text-[9px] font-bold text-slate-500 uppercase">Package Note</p>
-            <p class="text-[10px] text-slate-700 dark:text-slate-300 italic">"${targetOrder.packageNotes}"</p>
-          </div>
-        </div>
-      `, { closeButton: false }).openPopup();
-      
-      return () => { destMarker.remove(); };
+    if (targetOrder?.rider?.location) {
+      centerMap(targetOrder.rider.location, 17);
+      if (markersMapRef.current.has(targetOrder.rider.id)) {
+        markersMapRef.current.get(targetOrder.rider.id).openPopup();
+      }
     }
-  }, [targetOrder, currentUser?.location]);
+  }, [targetOrder]);
 
-  // Real-time Telemetry Subscription
   useEffect(() => {
-    if (!mapRef.current) return;
-
     const ridersQuery = query(
       collection(db, 'users'), 
       where('role', '==', Role.Rider),
-      where('active', '==', true),
-      where('isDeleted', '==', false)
+      where('active', '==', true)
     );
 
     const unsubscribe = onSnapshot(ridersQuery, (snapshot) => {
       const map = mapRef.current;
+      if (!map) return;
+      
       const activeIds = new Set<string>();
       const ridersList: User[] = [];
 
@@ -127,42 +102,36 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         const position: [number, number] = [rider.location.lat, rider.location.lng];
 
         if (markersMapRef.current.has(rider.id)) {
-          const existingMarker = markersMapRef.current.get(rider.id);
-          existingMarker.setLatLng(position);
+          markersMapRef.current.get(rider.id).setLatLng(position);
         } else {
           const statusColor = rider.riderStatus === 'On Delivery' ? '#f59e0b' : '#10b981';
           const riderIcon = L.divIcon({
-            html: `<div class="rider-pulse-marker">
-                    <div class="marker-dot" style="background: ${statusColor}"></div>
-                    <div class="marker-label">${rider.name.charAt(0)}</div>
-                    <div class="marker-wave" style="background: ${statusColor}4d"></div>
+            html: `<div class="rider-marker-v2">
+                    <div class="marker-shadow"></div>
+                    <div class="marker-body" style="background: ${statusColor}">
+                      ${rider.profilePicture ? `<img src="${rider.profilePicture}" class="marker-img" />` : `<span class="marker-initial">${rider.name.charAt(0)}</span>`}
+                    </div>
+                    <div class="marker-beak" style="border-top-color: ${statusColor}"></div>
                    </div>`,
             className: '',
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
+            iconSize: [44, 52],
+            iconAnchor: [22, 52],
           });
 
-          const newMarker = L.marker(position, { icon: riderIcon }).addTo(map);
-          newMarker.bindPopup(`
-            <div class="p-3 min-w-[150px] font-outfit">
-              <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 mb-2">
-                <p class="font-bold text-slate-900 dark:text-white">${rider.name}</p>
-                <div class="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
-                    <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </div>
+          const marker = L.marker(position, { icon: riderIcon }).addTo(map);
+          marker.bindPopup(`
+            <div class="p-3 text-center min-w-[120px]">
+              <p class="font-black text-[10px] uppercase tracking-widest text-indigo-600 mb-1">${rider.name}</p>
+              <div class="flex items-center justify-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full ${rider.riderStatus === 'Available' ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
+                <span class="text-[9px] font-bold text-slate-500 uppercase">${rider.riderStatus}</span>
               </div>
-              <div class="flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full ${rider.riderStatus === 'On Delivery' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}"></span>
-                <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">${rider.riderStatus || 'Active'}</span>
-              </div>
-              <p class="text-[8px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">Live Telemetry Active</p>
+              <p class="text-[8px] text-slate-400 mt-2 font-mono">${rider.location.lat.toFixed(4)}, ${rider.location.lng.toFixed(4)}</p>
             </div>
-          `, { closeButton: false });
-          markersMapRef.current.set(rider.id, newMarker);
+          `, { closeButton: false, offset: [0, -40] });
+          markersMapRef.current.set(rider.id, marker);
         }
       });
-
-      setActiveRiders(ridersList);
 
       markersMapRef.current.forEach((marker, id) => {
         if (!activeIds.has(id)) {
@@ -170,197 +139,132 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
           markersMapRef.current.delete(id);
         }
       });
+      setActiveRiders(ridersList);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const focusRider = (rider: User) => {
-    if (rider.locationStatus === 'Disabled') {
-        alert(`${rider.name} has disabled GPS tracking.`);
-        return;
-    }
-    if (mapRef.current && rider.location) {
-      mapRef.current.flyTo([rider.location.lat, rider.location.lng], 19, { duration: 1.5 });
-      markersMapRef.current.get(rider.id)?.openPopup();
-    }
-  };
-
-  const isAdminView = currentUser?.role === Role.Admin || currentUser?.role === Role.SuperAdmin;
-
   return (
-    <div className="flex flex-col xl:flex-row gap-6 animate-in zoom-in-95 duration-500">
-      <div className="flex-grow bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden relative group">
-        <div className="absolute top-4 left-4 z-[400] flex flex-col gap-2 pointer-events-none">
-            <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl px-4 py-2.5 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 shadow-2xl flex items-center gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase text-slate-900 dark:text-white tracking-[0.1em]">
-                      {targetOrder ? 'Landmark Navigation Mode' : 'Fleet Intelligence Feed'}
-                  </span>
-                  <span className="text-[8px] font-bold text-slate-500 uppercase">Delta Region • Asaba Core</span>
-                </div>
-            </div>
+    <div className="h-full w-full flex flex-col gap-4 animate-in fade-in duration-700">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden relative h-[500px] md:h-[600px]">
+        <div ref={mapContainerRef} className="h-full w-full z-10" />
+        
+        {/* Map UI Overlay */}
+        <div className="absolute top-6 left-6 z-[400] flex flex-col gap-3">
+          <button 
+            onClick={locateMe} 
+            disabled={isLocating}
+            className="p-4 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 hover:scale-110 active:scale-95 transition-all text-indigo-600 disabled:opacity-50"
+            title="Locate Me"
+          >
+            {isLocating ? (
+              <svg className="animate-spin w-6 h-6" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            ) : (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            )}
+          </button>
         </div>
 
-        <div 
-          ref={mapContainerRef} 
-          className={`h-[700px] w-full relative z-10 ${systemSettings.theme === 'dark' ? 'leaflet-dark-theme' : ''}`} 
-        />
-        
-        {/* Terrain Indicator Overlay */}
-        <div className="absolute bottom-4 left-4 z-[400] bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 text-[9px] font-black text-white uppercase tracking-widest pointer-events-none">
-            HD Terrain Enabled
+        <div className="absolute bottom-6 left-6 right-6 md:left-auto md:w-64 z-[400]">
+           <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-2xl">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Fleet Signal</p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="text-[10px] font-black text-slate-800 dark:text-white uppercase">Live Nodes</span>
+                </div>
+                <span className="text-xs font-black text-indigo-600">{activeRiders.filter(r => r.locationStatus === 'Active').length}</span>
+              </div>
+           </div>
         </div>
       </div>
 
-      {isAdminView && (
-        <div className="xl:w-80 flex-shrink-0">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 h-full flex flex-col">
-            <div className="flex items-center justify-between mb-6 px-2">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Personnel Grid</h3>
-                <span className="text-[9px] font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 px-2 py-0.5 rounded-full">LIVE</span>
-            </div>
-            <div className="space-y-3 overflow-y-auto no-scrollbar flex-grow pr-1">
-              {activeRiders.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <svg className="w-8 h-8 text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round"/></svg>
-                    <p className="text-xs text-slate-400 font-medium">No signals detected</p>
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto no-scrollbar">
+        <div className="flex gap-4 min-w-max">
+          {activeRiders.length === 0 && <p className="text-[10px] text-slate-400 font-bold uppercase py-4">No active fleet nodes detected</p>}
+          {activeRiders.map(rider => (
+            <button 
+              key={rider.id}
+              onClick={() => rider.location && centerMap(rider.location, 18)}
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-500 transition-all shrink-0 hover:shadow-lg group"
+            >
+              <div className="w-10 h-10 rounded-full border-2 border-white dark:border-slate-800 overflow-hidden shadow-sm group-hover:border-indigo-500 transition-colors">
+                {rider.profilePicture ? <img src={rider.profilePicture} className="w-full h-full object-cover" /> : <div className="bg-indigo-600 text-white w-full h-full flex items-center justify-center font-bold text-xs">{rider.name.charAt(0)}</div>}
+              </div>
+              <div className="text-left">
+                <p className="text-[10px] font-black uppercase text-slate-900 dark:text-white truncate max-w-[100px]">{rider.name}</p>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${rider.riderStatus === 'Available' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                  <span className="text-[8px] font-bold text-slate-500 uppercase">{rider.riderStatus}</span>
                 </div>
-              ) : activeRiders.map(rider => (
-                <button 
-                  key={rider.id}
-                  onClick={() => focusRider(rider)}
-                  className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-3 group relative overflow-hidden ${
-                      rider.locationStatus === 'Disabled' 
-                      ? 'bg-rose-50/30 dark:bg-rose-950/10 border-rose-100 dark:border-rose-900/20 opacity-60' 
-                      : 'border-slate-100 dark:border-slate-800 hover:border-indigo-500/50 bg-slate-50/50 dark:bg-slate-950/30 hover:shadow-lg'
-                  }`}
-                >
-                  <div className={`w-11 h-11 rounded-full border-2 overflow-hidden transition-all group-hover:scale-105 ${rider.locationStatus === 'Disabled' ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'}`}>
-                    {rider.profilePicture ? (
-                      <img src={rider.profilePicture} className="w-full h-full object-cover" alt={rider.name} />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-400 bg-slate-100 dark:bg-slate-800">
-                        <span className="text-xs font-bold">{rider.name.charAt(0)}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-grow min-w-0">
-                    <p className="font-bold text-slate-900 dark:text-white text-xs truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{rider.name}</p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                        <span className={`w-1.5 h-1.5 rounded-full ${rider.riderStatus === 'On Delivery' ? 'bg-amber-500' : rider.riderStatus === 'Available' ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
-                        <span className="text-[9px] font-black uppercase text-slate-500 tracking-tighter">
-                          {rider.locationStatus === 'Disabled' ? 'SIGNAL LOST' : (rider.riderStatus || 'STANDBY')}
-                        </span>
-                    </div>
-                  </div>
-                  {rider.locationStatus !== 'Disabled' && (
-                    <div className="absolute right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-width="2"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" stroke-width="2"/></svg>
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
+              </div>
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       <style>{`
-        .leaflet-dark-theme .leaflet-tile-pane {
-            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-        }
-        
-        .rider-pulse-marker {
-            position: relative;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .marker-dot {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            border: 2px solid white;
-            z-index: 10;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        }
-
-        .marker-label {
-            position: absolute;
-            z-index: 11;
-            color: white;
-            font-size: 11px;
-            font-weight: 900;
-            pointer-events: none;
-        }
-
-        .marker-wave {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            animation: pulse-wave 2s infinite ease-out;
-            z-index: 1;
-        }
-
-        .dest-marker {
-          position: relative;
+        .rider-marker-v2 {
           display: flex;
           flex-direction: column;
           align-items: center;
+          position: relative;
+          filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
+          transition: transform 0.3s ease;
         }
-
-        .dest-pin {
-          width: 16px;
-          height: 16px;
-          background: #ef4444;
-          border-radius: 50%;
-          border: 4px solid white;
-          box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
-          z-index: 2;
+        .rider-marker-v2:hover { transform: scale(1.1) translateY(-5px); }
+        .marker-body {
+          width: 44px;
+          height: 44px;
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          border: 3px solid white;
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
-
-        .dest-label-container {
-          position: absolute;
-          top: -32px;
-          background: #ef4444;
+        .marker-img, .marker-initial {
+          transform: rotate(45deg);
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .marker-initial {
+          display: flex;
+          align-items: center;
+          justify-content: center;
           color: white;
-          padding: 4px 12px;
-          border-radius: 10px;
-          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-          z-index: 3;
-          white-space: nowrap;
-        }
-
-        .dest-label-text {
-          font-size: 11px;
           font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
+          font-size: 16px;
         }
-
-        @keyframes pulse-wave {
-            0% { transform: scale(0.5); opacity: 1; }
-            100% { transform: scale(2.5); opacity: 0; }
+        .marker-shadow {
+          position: absolute;
+          bottom: -5px;
+          width: 20px;
+          height: 8px;
+          background: rgba(0,0,0,0.3);
+          border-radius: 50%;
+          filter: blur(2px);
         }
-
         .leaflet-popup-content-wrapper {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            padding: 0;
-            border: 1px solid #f1f5f9;
-            overflow: hidden;
+          border-radius: 16px;
+          background: rgba(255,255,255,0.95);
+          backdrop-filter: blur(4px);
+          border: 1px solid rgba(0,0,0,0.05);
         }
-        .dark .leaflet-popup-content-wrapper { background: #0f172a; color: white; border-color: #1e293b; }
-        .leaflet-popup-tip { background: white; }
-        .dark .leaflet-popup-tip { background: #0f172a; }
-        .leaflet-container { font-family: 'Inter', sans-serif !important; }
+        .dark .leaflet-popup-content-wrapper {
+          background: rgba(15, 23, 42, 0.95);
+          color: white;
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+        .leaflet-popup-tip {
+          background: rgba(255,255,255,0.95);
+        }
+        .dark .leaflet-popup-tip {
+          background: rgba(15, 23, 42, 0.95);
+        }
       `}</style>
     </div>
   );
