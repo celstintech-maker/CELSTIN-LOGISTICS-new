@@ -12,14 +12,16 @@ interface MapViewProps {
 }
 
 const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
-  const { systemSettings, currentUser } = useContext(AppContext);
+  const { systemSettings } = useContext(AppContext);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any | null>(null); 
+  const routingControlRef = useRef<any | null>(null);
   const layersRef = useRef<{ [key: string]: any }>({});
   const markersMapRef = useRef<Map<string, any>>(new Map());
   const [activeRiders, setActiveRiders] = useState<User[]>([]);
   const [isLocating, setIsLocating] = useState(false);
   const [mapMode, setMapMode] = useState<'logistics' | 'satellite'>('logistics');
+  const [routeStats, setRouteStats] = useState<{distance: string, time: string} | null>(null);
 
   const centerMap = (coords: {lat: number, lng: number}, zoom = 15) => {
     if (mapRef.current) {
@@ -28,6 +30,19 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         easeLinearity: 0.25,
         noMoveStart: true 
       });
+    }
+  };
+
+  const geocodeAddress = async (address: string) => {
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ", Asaba, Nigeria")}&limit=1`);
+      const data = await response.json();
+      if (data && data.length > 0) {
+        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   };
 
@@ -45,6 +60,79 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       }
     }
   };
+
+  // Initialize Routing
+  useEffect(() => {
+    if (!mapRef.current || !targetOrder) {
+      if (routingControlRef.current) {
+        mapRef.current.removeControl(routingControlRef.current);
+        routingControlRef.current = null;
+        setRouteStats(null);
+      }
+      return;
+    }
+
+    const buildRoute = async () => {
+      const pickupCoords = await geocodeAddress(targetOrder.pickupAddress);
+      const dropoffCoords = await geocodeAddress(targetOrder.dropoffAddress);
+      
+      if (!pickupCoords || !dropoffCoords) return;
+
+      const waypoints = [
+        L.latLng(pickupCoords.lat, pickupCoords.lng),
+        L.latLng(dropoffCoords.lat, dropoffCoords.lng)
+      ];
+
+      // Add rider to route if assigned and has location
+      if (targetOrder.rider?.id) {
+        const assignedRider = activeRiders.find(r => r.id === targetOrder.rider?.id);
+        if (assignedRider?.location) {
+          waypoints.unshift(L.latLng(assignedRider.location.lat, assignedRider.location.lng));
+        }
+      }
+
+      if (routingControlRef.current) {
+        mapRef.current.removeControl(routingControlRef.current);
+      }
+
+      routingControlRef.current = L.Routing.control({
+        waypoints,
+        routeWhileDragging: false,
+        addWaypoints: false,
+        createMarker: (i: number, wp: any) => {
+          const isFirst = i === 0;
+          const isLast = i === waypoints.length - 1;
+          const iconHtml = isFirst 
+            ? `<div class="bg-indigo-600 text-white p-2 rounded-full shadow-lg border-2 border-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></div>`
+            : isLast 
+              ? `<div class="bg-rose-600 text-white p-2 rounded-full shadow-lg border-2 border-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg></div>`
+              : `<div class="bg-amber-500 text-white p-2 rounded-full shadow-lg border-2 border-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg></div>`;
+          
+          return L.marker(wp.latLng, {
+            icon: L.divIcon({
+              className: '',
+              html: iconHtml,
+              iconSize: [32, 32],
+              iconAnchor: [16, 16]
+            })
+          });
+        },
+        lineOptions: {
+          styles: [{ color: '#4f46e5', weight: 6, opacity: 0.8 }]
+        }
+      }).addTo(mapRef.current);
+
+      routingControlRef.current.on('routesfound', (e: any) => {
+        const route = e.routes[0];
+        setRouteStats({
+          distance: (route.summary.totalDistance / 1000).toFixed(1) + ' km',
+          time: Math.round(route.summary.totalTime / 60) + ' mins'
+        });
+      });
+    };
+
+    buildRoute();
+  }, [targetOrder, activeRiders]);
 
   const locateMe = () => {
     setIsLocating(true);
@@ -103,17 +191,17 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         <div class="flex items-center justify-center gap-1.5 mb-3 border-b border-slate-100 dark:border-slate-800 pb-2">
           <span class="w-2 h-2 rounded-full ${isOff ? 'bg-rose-500' : (rider.riderStatus === 'Available' ? 'bg-emerald-500' : 'bg-amber-500')} ${isOff ? '' : 'animate-pulse'}"></span>
           <span class="text-[10px] font-black ${isOff ? 'text-rose-500' : 'text-slate-500'} uppercase tracking-tighter">
-            ${isOff ? 'LOCATION TURNED OFF' : rider.riderStatus}
+            ${isOff ? 'SIGNAL LOST' : rider.riderStatus}
           </span>
         </div>
         <div class="${isOff ? 'bg-rose-500/10 border-rose-200' : 'bg-indigo-600 border-indigo-400'} p-3 rounded-xl border shadow-xl mb-2">
            <p class="text-[10px] font-black ${isOff ? 'text-rose-600' : 'text-white'} uppercase leading-tight italic">
-            📍 ${isOff ? 'SIGNAL TERMINATED' : (rider.vehicle || 'Tracing Route...')}
+            📍 ${isOff ? 'LAST KNOWN: ' + (rider.vehicle || 'Unknown') : (rider.vehicle || 'Tracing Route...')}
            </p>
         </div>
-        <div class="flex flex-col gap-0.5 opacity-60">
-          <p class="text-[7px] text-slate-400 font-mono tracking-tighter uppercase">${isOff ? 'Last Known Lat/Lng' : 'Live Telemetry'}</p>
-          <p class="text-[7px] text-slate-400 font-mono tracking-tighter">${rider.location?.lat.toFixed(6)}, ${rider.location?.lng.toFixed(6)}</p>
+        <div class="flex flex-col gap-0.5 opacity-60 text-slate-400">
+          <p class="text-[7px] font-mono tracking-tighter uppercase">${isOff ? 'Last Signal Timestamp' : 'Live Telemetry'}</p>
+          <p class="text-[7px] font-mono tracking-tighter">${rider.location?.lat.toFixed(6)}, ${rider.location?.lng.toFixed(6)}</p>
         </div>
       </div>
     `;
@@ -142,49 +230,29 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
 
         const isOff = rider.locationStatus === 'Disabled';
         const position: [number, number] = [rider.location.lat, rider.location.lng];
+        const statusColor = isOff ? '#f43f5e' : (rider.riderStatus === 'On Delivery' ? '#f59e0b' : '#10b981');
+        
+        const riderIcon = L.divIcon({
+          html: `<div class="rider-marker-v4 ${isOff ? 'signal-off' : ''}" style="z-index: ${isOff ? 1 : 100}">
+                  <div class="marker-shadow"></div>
+                  <div class="marker-pulse" style="background: ${statusColor}"></div>
+                  <div class="marker-pointer" style="border-top-color: ${statusColor}"></div>
+                  <div class="marker-body" style="background: ${statusColor}">
+                    ${rider.profilePicture ? `<img src="${rider.profilePicture}" class="marker-img" />` : `<span class="marker-initial">${rider.name.charAt(0)}</span>`}
+                  </div>
+                 </div>`,
+          className: '',
+          iconSize: [44, 44],
+          iconAnchor: [22, 44],
+          popupAnchor: [0, -48]
+        });
 
         if (markersMapRef.current.has(rider.id)) {
           const marker = markersMapRef.current.get(rider.id);
           marker.setLatLng(position);
-          
-          // Update icon color based on status
-          const statusColor = isOff ? '#f43f5e' : (rider.riderStatus === 'On Delivery' ? '#f59e0b' : '#10b981');
-          const newIcon = L.divIcon({
-            html: `<div class="rider-marker-v4 ${isOff ? 'signal-off' : ''}">
-                    <div class="marker-shadow"></div>
-                    <div class="marker-pulse" style="background: ${statusColor}"></div>
-                    <div class="marker-pointer" style="border-top-color: ${statusColor}"></div>
-                    <div class="marker-body" style="background: ${statusColor}">
-                      ${rider.profilePicture ? `<img src="${rider.profilePicture}" class="marker-img" />` : `<span class="marker-initial">${rider.name.charAt(0)}</span>`}
-                    </div>
-                   </div>`,
-            className: '',
-            iconSize: [44, 44],
-            iconAnchor: [22, 44],
-            popupAnchor: [0, -48]
-          });
-          marker.setIcon(newIcon);
-          
-          if (marker.isPopupOpen()) {
-             marker.getPopup().setContent(generatePopupContent(rider));
-          }
+          marker.setIcon(riderIcon);
+          if (marker.isPopupOpen()) marker.getPopup().setContent(generatePopupContent(rider));
         } else {
-          const statusColor = isOff ? '#f43f5e' : (rider.riderStatus === 'On Delivery' ? '#f59e0b' : '#10b981');
-          const riderIcon = L.divIcon({
-            html: `<div class="rider-marker-v4 ${isOff ? 'signal-off' : ''}">
-                    <div class="marker-shadow"></div>
-                    <div class="marker-pulse" style="background: ${statusColor}"></div>
-                    <div class="marker-pointer" style="border-top-color: ${statusColor}"></div>
-                    <div class="marker-body" style="background: ${statusColor}">
-                      ${rider.profilePicture ? `<img src="${rider.profilePicture}" class="marker-img" />` : `<span class="marker-initial">${rider.name.charAt(0)}</span>`}
-                    </div>
-                   </div>`,
-            className: '',
-            iconSize: [44, 44],
-            iconAnchor: [22, 44],
-            popupAnchor: [0, -48]
-          });
-
           const marker = L.marker(position, { icon: riderIcon }).addTo(map);
           marker.bindPopup(generatePopupContent(rider), { 
             closeButton: false, 
@@ -201,6 +269,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
           markersMapRef.current.delete(id);
         }
       });
+      
       setActiveRiders(ridersList);
     });
 
@@ -212,6 +281,23 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden relative h-[500px] md:h-[650px]">
         <div ref={mapContainerRef} className="h-full w-full z-10" />
         
+        {/* Route Stats Overlay */}
+        {routeStats && (
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[400] flex gap-3 animate-in slide-in-from-top-4">
+             <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 py-3 rounded-2xl border border-indigo-100 dark:border-indigo-900 shadow-2xl flex items-center gap-4">
+                <div className="flex flex-col">
+                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Distance</p>
+                   <p className="text-sm font-black text-indigo-600 dark:text-indigo-400">{routeStats.distance}</p>
+                </div>
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-800"></div>
+                <div className="flex flex-col">
+                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Est. Arrival</p>
+                   <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">{routeStats.time}</p>
+                </div>
+             </div>
+          </div>
+        )}
+
         <div className="absolute top-6 left-6 z-[400] flex flex-col gap-3">
           <button onClick={locateMe} disabled={isLocating} className="p-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 hover:scale-110 active:scale-95 transition-all text-indigo-600">
             {isLocating ? <svg className="animate-spin w-6 h-6" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>}
@@ -233,12 +319,12 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
               <div className="flex flex-col gap-2">
                  {activeRiders.some(r => r.locationStatus === 'Disabled') && (
                     <div className="bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-lg flex items-center justify-between">
-                       <p className="text-[9px] font-black text-rose-600 uppercase">Alert: Signal Dropped</p>
+                       <p className="text-[9px] font-black text-rose-600 uppercase tracking-tighter">Fleet Signal Warning</p>
                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                     </div>
                  )}
                  <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 italic">
-                    {activeRiders.find(r => r.locationStatus === 'Active' && r.vehicle)?.vehicle || 'Monitoring Fleet Nodes...'}
+                    {targetOrder ? `Tracing Route: ${targetOrder.id.slice(-5)}` : (activeRiders.find(r => r.locationStatus === 'Active' && r.vehicle)?.vehicle || 'Monitoring Fleet Nodes...')}
                  </p>
               </div>
            </div>
@@ -248,7 +334,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto no-scrollbar">
         <div className="flex gap-4 min-w-max">
           {activeRiders.map(rider => (
-            <button key={rider.id} onClick={() => rider.location && centerMap(rider.location, 18)} className={`flex items-center gap-3 p-4 rounded-2xl border transition-all shrink-0 hover:shadow-lg group relative ${rider.locationStatus === 'Disabled' ? 'bg-rose-50 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/40 opacity-70' : 'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800 hover:border-indigo-500'}`}>
+            <button key={rider.id} onClick={() => rider.location && centerMap(rider.location, 18)} className={`flex items-center gap-3 p-4 rounded-2xl border transition-all shrink-0 hover:shadow-lg group relative ${rider.locationStatus === 'Disabled' ? 'bg-rose-50 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/40' : 'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800 hover:border-indigo-500'}`}>
               <div className={`w-12 h-12 rounded-full border-2 overflow-hidden shadow-sm transition-colors ${rider.locationStatus === 'Disabled' ? 'border-rose-400 grayscale' : 'border-white dark:border-slate-800 group-hover:border-indigo-500'}`}>
                 {rider.profilePicture ? <img src={rider.profilePicture} className="w-full h-full object-cover" /> : <div className="bg-indigo-600 text-white w-full h-full flex items-center justify-center font-bold text-xs">{rider.name.charAt(0)}</div>}
               </div>
@@ -256,11 +342,11 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
                 <p className="text-[11px] font-black uppercase text-slate-900 dark:text-white truncate tracking-tight">{rider.name}</p>
                 <div className="flex flex-col mt-1">
                   <span className={`text-[9px] font-black uppercase tracking-tighter mb-0.5 italic truncate px-2 py-0.5 rounded-md ${rider.locationStatus === 'Disabled' ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400' : 'bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400'}`}>
-                    {rider.locationStatus === 'Disabled' ? 'OFFLINE / SIGNAL LOST' : (rider.vehicle || 'On Route')}
+                    {rider.locationStatus === 'Disabled' ? 'SIGNAL TERMINATED' : (rider.vehicle || 'On Route')}
                   </span>
                   <div className="flex items-center gap-1.5 mt-1">
                     <span className={`w-1.5 h-1.5 rounded-full ${rider.locationStatus === 'Disabled' ? 'bg-rose-500' : (rider.riderStatus === 'Available' ? 'bg-emerald-500' : 'bg-amber-500')}`}></span>
-                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{rider.locationStatus === 'Disabled' ? 'DISCONNECTED' : rider.riderStatus}</span>
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{rider.locationStatus === 'Disabled' ? 'OFFLINE' : rider.riderStatus}</span>
                   </div>
                 </div>
               </div>
@@ -271,8 +357,8 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
 
       <style>{`
         .rider-marker-v4 { display: flex; align-items: center; justify-content: center; position: relative; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .signal-off .marker-body { filter: grayscale(1) brightness(0.7); border-color: #f43f5e; }
-        .signal-off .marker-pulse { background: #f43f5e !important; animation: none; opacity: 0.1; }
+        .signal-off .marker-body { filter: grayscale(0.8) brightness(0.7); border-color: #f43f5e; opacity: 0.8; }
+        .signal-off .marker-pulse { display: none; }
         .marker-body { width: 44px; height: 44px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3.5px solid white; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 5; }
         .marker-pointer { position: absolute; bottom: -8px; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 10px solid white; z-index: 4; }
         .marker-img, .marker-initial { width: 100%; height: 100%; object-fit: cover; transform: rotate(45deg); }
