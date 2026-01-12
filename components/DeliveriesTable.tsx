@@ -3,7 +3,8 @@ import React, { useState, useContext } from 'react';
 import { Delivery, DeliveryStatus, PaymentStatus, Role } from '../types';
 import { AppContext } from '../App';
 import { UserCircleIcon, MapIcon } from './icons';
-import { updateData } from '../firebase';
+import { updateData, db } from '../firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
 
 interface DeliveriesTableProps {
   title: string;
@@ -25,8 +26,10 @@ const statusStyles: { [key in DeliveryStatus]: string } = {
 const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, onLocate }) => {
     const { currentUser, allUsers, systemSettings } = useContext(AppContext);
     const [verifyingId, setVerifyingId] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
     const isAdmin = currentUser?.role === Role.SuperAdmin || currentUser?.role === Role.Admin;
+    const isSuperAdmin = currentUser?.role === Role.SuperAdmin;
 
     const handleStatusChange = async (id: string, newStatus: DeliveryStatus) => {
         try {
@@ -48,6 +51,25 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
             alert("Verification failed.");
         } finally {
             setVerifyingId(null);
+        }
+    };
+
+    const handleDeleteOrder = async (id: string) => {
+        if (!isSuperAdmin) {
+            alert("Unauthorized: Only Super Admins can delete orders.");
+            return;
+        }
+        if (!window.confirm("CRITICAL ACTION: This will permanently delete this delivery record from the database. This cannot be undone. Proceed?")) {
+            return;
+        }
+        
+        setIsDeleting(id);
+        try {
+            await deleteDoc(doc(db, "deliveries", id));
+        } catch (error) {
+            alert("Delete failed. Please check connection.");
+        } finally {
+            setIsDeleting(null);
         }
     };
 
@@ -123,12 +145,12 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                         </div>
                         
                         {/* Mobile Actions Overlay */}
-                        <div className="flex gap-2">
+                        <div className="flex flex-col gap-2">
                              {currentUser?.role === Role.Rider && d.rider?.id === currentUser.id && (
                                 <select 
                                     value={d.status} 
                                     onChange={(e) => handleStatusChange(d.id, e.target.value as DeliveryStatus)} 
-                                    className="flex-grow bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase rounded-lg px-2 py-2"
+                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase rounded-lg px-2 py-2"
                                 >
                                     <option value={DeliveryStatus.Pending}>Pending</option>
                                     <option value={DeliveryStatus.PickedUp}>Picked Up</option>
@@ -140,10 +162,20 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                                 <button 
                                   onClick={() => handleVerifyPayment(d.id)} 
                                   disabled={verifyingId === d.id}
-                                  className="flex-grow bg-emerald-500 text-white text-[10px] font-black uppercase rounded-lg py-2 flex items-center justify-center gap-2"
+                                  className="w-full bg-emerald-500 text-white text-[10px] font-black uppercase rounded-lg py-2 flex items-center justify-center gap-2"
                                 >
                                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 4.946-2.56 9.12-6.433 11.49a1 1 0 01-1.134 0C6.561 16.12 4 11.946 4 7c0-.68.056-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
                                     {verifyingId === d.id ? 'Processing...' : 'Verify Payment'}
+                                </button>
+                             )}
+                             {isSuperAdmin && (d.status === DeliveryStatus.Delivered || d.status === DeliveryStatus.Failed) && (
+                                <button 
+                                  onClick={() => handleDeleteOrder(d.id)}
+                                  disabled={isDeleting === d.id}
+                                  className="w-full bg-rose-500/10 text-rose-500 text-[10px] font-black uppercase rounded-lg py-2 border border-rose-500/20 flex items-center justify-center gap-2"
+                                >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    {isDeleting === d.id ? 'Purging...' : 'Purge Record'}
                                 </button>
                              )}
                         </div>
@@ -215,6 +247,16 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                                                 <option value="" disabled>Assign</option>
                                                 {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                                             </select>
+                                        )}
+                                        {isSuperAdmin && (d.status === DeliveryStatus.Delivered || d.status === DeliveryStatus.Failed) && (
+                                            <button 
+                                                onClick={() => handleDeleteOrder(d.id)}
+                                                disabled={isDeleting === d.id}
+                                                className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all"
+                                                title="Permanently Delete Order"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            </button>
                                         )}
                                     </div>
                                 </td>
