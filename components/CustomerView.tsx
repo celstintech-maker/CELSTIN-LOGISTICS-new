@@ -17,6 +17,35 @@ const CustomerView: React.FC = () => {
     const [origin, setOrigin] = useState('');
     const [destination, setDestination] = useState('');
     const [pricePreview, setPricePreview] = useState<number>(1500);
+    const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+
+    // Address resolution helper
+    const resolveAddress = async (lat: number, lng: number) => {
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+            const data = await response.json();
+            const addr = data.address;
+            const road = addr.road || addr.suburb || addr.neighbourhood || 'Current Location';
+            const landmark = addr.amenity || addr.building || addr.shop || data.name;
+            return landmark && landmark !== road ? `${road} (Near ${landmark})` : road;
+        } catch (e) {
+            return 'My Location';
+        }
+    };
+
+    // Auto-detect pickup location on load
+    useEffect(() => {
+        setIsDetectingLocation(true);
+        navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+                const address = await resolveAddress(pos.coords.latitude, pos.coords.longitude);
+                setOrigin(address);
+                setIsDetectingLocation(false);
+            },
+            () => setIsDetectingLocation(false),
+            { enableHighAccuracy: true }
+        );
+    }, []);
 
     useEffect(() => {
         if (origin.trim() && destination.trim()) {
@@ -29,7 +58,6 @@ const CustomerView: React.FC = () => {
         }
     }, [origin, destination, systemSettings.pricePerKm]);
 
-    // Track the live status of the last placed delivery
     useEffect(() => {
         if (!lastDeliveryId) return;
         const unsub = onSnapshot(doc(db, "deliveries", lastDeliveryId), (snap) => {
@@ -104,8 +132,11 @@ const CustomerView: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                          <label htmlFor="pickupAddress" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Pickup Address</label>
+                      <div className="space-y-2 relative">
+                          <label htmlFor="pickupAddress" className="block text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                            Pickup Address
+                            {isDetectingLocation && <span className="text-[8px] animate-pulse text-indigo-500">Detecting...</span>}
+                          </label>
                           <input 
                               type="text" 
                               name="pickupAddress" 
@@ -113,9 +144,12 @@ const CustomerView: React.FC = () => {
                               required 
                               value={origin}
                               onChange={(e) => setOrigin(e.target.value)}
-                              className="customer-input" 
+                              className="customer-input pr-10" 
                               placeholder="Where should we pick up?" 
                           />
+                          <div className="absolute right-3 bottom-3 text-indigo-500">
+                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                          </div>
                       </div>
                       <div className="space-y-2">
                           <label htmlFor="dropoffAddress" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Delivery Address</label>

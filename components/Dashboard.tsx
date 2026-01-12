@@ -39,15 +39,15 @@ const Dashboard: React.FC = () => {
       const addr = data.address;
       
       const landmark = addr.amenity || addr.building || addr.shop || addr.tourism || addr.historic || addr.office || addr.leisure || data.name;
-      const street = addr.road || addr.suburb || addr.neighbourhood || 'Asaba Route';
+      const road = addr.road || addr.suburb || addr.neighbourhood || 'Asaba Route';
       
-      if (landmark && landmark !== street && !street.includes(landmark)) {
-        return `${street} (Near ${landmark})`;
+      if (landmark && landmark !== road && !road.includes(landmark)) {
+        return `${road} (Near ${landmark})`;
       }
-      return street;
+      return road;
     } catch (error) {
       console.error("Geocoding error", error);
-      return 'Tracking Fleet...';
+      return 'Active Tracking...';
     }
   };
 
@@ -60,22 +60,21 @@ const Dashboard: React.FC = () => {
         watchId = navigator.geolocation.watchPosition(
           async (position) => {
             const { latitude, longitude } = position.coords;
-            const locationString = await getStreetAndLandmark(latitude, longitude);
+            const exactAddress = await getStreetAndLandmark(latitude, longitude);
             
-            // Local state for UI feedback
-            setCurrentStreet(locationString);
+            setCurrentStreet(exactAddress);
             
-            // Broadcast to the entire system via Firebase
+            // Broadcast the exact address to the entire system
             await handleUpdateUser(currentUser.id, { 
               location: { lat: latitude, lng: longitude },
-              vehicle: locationString, // Using vehicle field for live location string broadcast
+              vehicle: exactAddress, // Using vehicle field for live address broadcast
               locationStatus: 'Active'
             });
           },
           (err) => {
             console.error("Tracking Error:", err);
             if (err.code === 1) {
-              alert("GPS Permission Denied. Your movements are not being tracked.");
+              alert("GPS Permission Denied. Active tracking stopped.");
             }
           },
           { 
@@ -84,8 +83,6 @@ const Dashboard: React.FC = () => {
             timeout: 10000
           }
         );
-      } else {
-        alert("Your device does not support geolocation tracking.");
       }
     }
 
@@ -104,14 +101,14 @@ const Dashboard: React.FC = () => {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
-          const locationString = await getStreetAndLandmark(coords.lat, coords.lng);
-          setCurrentStreet(locationString);
+          const exactAddress = await getStreetAndLandmark(coords.lat, coords.lng);
+          setCurrentStreet(exactAddress);
           
           await handleUpdateUser(currentUser.id, { 
             riderStatus: 'Available', 
             location: coords,
             locationStatus: 'Active',
-            vehicle: locationString
+            vehicle: exactAddress
           });
         },
         (error) => alert("GPS signal required to start shift.")
@@ -212,7 +209,7 @@ const Dashboard: React.FC = () => {
                     <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 mb-1">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                       <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
-                        Broadcasting Movements
+                        Broadcasting Live Address
                       </span>
                     </div>
                     {currentUser.vehicle && (
