@@ -1,5 +1,5 @@
 
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { AppContext } from '../App';
 import { Role, User } from '../types';
 import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, setProfileData, getUserProfile, signOut, sendPasswordResetEmail } from '../firebase';
@@ -12,6 +12,7 @@ const Login: React.FC = () => {
   const [emailInput, setEmailInput] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false); // New lock state
   
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -66,7 +67,9 @@ const Login: React.FC = () => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
+    
     setIsLoading(true);
+    setIsRegistering(true); // Lock the UI to registration flow
     setMessage({ text: '', type: 'info' });
 
     const trimmedEmail = emailInput.trim().toLowerCase();
@@ -90,44 +93,47 @@ const Login: React.FC = () => {
         riderStatus: 'Offline'
       };
 
-      // 2. Optimistically update local UI for non-admins to prevent "stuck" feeling
+      // 2. Perform the database write
+      await setProfileData(userCredential.user.uid, newUserProfile);
+      
       if (!isSuperAdminEmail) {
-        // Fire and forget the profile creation, we just need to confirm it started
-        setProfileData(userCredential.user.uid, newUserProfile).catch(err => {
-          console.error("Delayed profile write failed:", err);
-        });
-        
-        // Immediate cleanup and success view
-        await signOut(auth);
-        setIsLoading(false);
+        // IMPORTANT: Update UI state FIRST before signing out to prevent observer racing
         setRegistrationSuccess(true);
+        setIsLoading(false);
+        
+        // 3. Cleanup Auth - even if this delays, the user sees the success screen
+        await signOut(auth);
+        
+        // Clear inputs after success is locked in
         setEmailInput('');
         setPassword('');
         setName('');
         setPhone('');
       } else {
-        // Super Admins need to wait for profile to ensure immediate dashboard access
-        await setProfileData(userCredential.user.uid, newUserProfile);
+        // Super Admins proceed directly to dashboard
         setCurrentUser(newUserProfile);
         setIsLoading(false);
       }
     } catch (error: any) {
       console.error("Registration Error:", error);
-      setIsLoading(false);
       let errorMsg = 'Registration failed. Check connection.';
       if (error.code === 'auth/email-already-in-use') errorMsg = 'This email is already registered.';
       if (error.code === 'auth/invalid-email') errorMsg = 'Please enter a valid email address.';
       if (error.code === 'auth/weak-password') errorMsg = 'Password must be at least 6 characters.';
       setMessage({ text: errorMsg, type: 'error' });
+      setIsLoading(false);
+      setIsRegistering(false); // Release lock on error
     }
   };
 
   const resetToLogin = () => {
+    setIsRegistering(false);
     setRegistrationSuccess(false);
     setView('login');
     setMessage({ text: '', type: 'info' });
   };
 
+  // If we have successfully registered, show the success view and ignore other states
   if (registrationSuccess) {
     return (
       <div className="bg-white dark:bg-slate-900 p-8 md:p-10 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md mx-auto animate-in zoom-in-95 duration-500 text-center will-change-transform">

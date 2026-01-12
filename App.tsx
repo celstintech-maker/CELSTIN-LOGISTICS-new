@@ -9,7 +9,7 @@ import Dashboard from './components/Dashboard';
 import CustomerView from './components/CustomerView';
 import ChatWidget from './components/ChatWidget';
 import { db, auth, syncCollection, onAuthStateChanged, signOut, updateData, setProfileData } from './firebase';
-import { doc, onSnapshot, query, collection, where, orderBy, limit, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 export interface ChatMessage {
   id: string;
@@ -130,18 +130,27 @@ const App: React.FC = () => {
     }
   };
 
-  // Profile and Auth Sync
+  // Hardened Auth Observer
   useEffect(() => {
     const authUnsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
+        // Track the profile for the logged in user
         const profileUnsub = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
           if (docSnap.exists()) {
             const profile = { id: docSnap.id, ...docSnap.data() } as User;
+            
+            // CRITICAL: Only log in if active AND not deleted
             if (profile.active && !profile.isDeleted) {
               setCurrentUser(profile);
             } else {
+              // If we are unapproved or deleted, we stay at null 
+              // and let the Login component handle its own success screen logic
               setCurrentUser(null);
-              if (profile.active === false || profile.isDeleted) signOut(auth);
+              // Explicitly sign out if not approved, unless they are currently registering
+              // (which is handled by Login.tsx anyway)
+              if (profile.active === false || profile.isDeleted) {
+                signOut(auth);
+              }
             }
           }
         });
@@ -155,9 +164,9 @@ const App: React.FC = () => {
 
   // Settings Sync
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "settings", "global"), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data() as SystemSettings;
+    const unsub = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as SystemSettings;
         setSystemSettings(data);
         localStorage.setItem('clestin_settings', JSON.stringify(data));
       }
