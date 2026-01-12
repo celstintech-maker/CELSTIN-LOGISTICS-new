@@ -1,16 +1,18 @@
 
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { AppContext } from '../App';
-import { ChatBubbleIcon } from './icons';
+import { ChatBubbleIcon, MapIcon } from './icons';
 import { Role } from '../types';
 import { pushData, syncChat, db } from '../firebase';
 import { collection, deleteDoc, getDocs } from 'firebase/firestore';
+import { GoogleGenAI } from "@google/genai";
 
 const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { currentUser } = useContext(AppContext);
+  const { currentUser, systemSettings } = useContext(AppContext);
   const [chatHistory, setChatHistory] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
+  const [isAiThinking, setIsAiThinking] = useState(false);
   const [pendingFile, setPendingFile] = useState<{data: string, name: string, type: string} | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -31,52 +33,84 @@ const ChatWidget: React.FC = () => {
     }
   }, [chatHistory, isOpen]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert("File too large. Max 2MB allowed.");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPendingFile({
-          data: reader.result as string,
-          name: file.name,
-          type: file.type
-        });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() && !pendingFile) return;
 
+    const userText = inputText;
     const messagePayload = {
         senderId: currentUser?.id || 'guest',
         senderName: currentUser?.name || 'Guest Customer',
-        text: inputText,
+        text: userText,
         isAdmin: isAdmin,
-        attachment: pendingFile || null
+        attachment: pendingFile || null,
+        timestamp: new Date()
     };
 
     try {
       await pushData('messages', messagePayload);
       setInputText('');
       setPendingFile(null);
+
+      // Trigger AI Response if it's a question about locations or logistics
+      if (userText.toLowerCase().includes('where') || userText.toLowerCase().includes('location') || userText.toLowerCase().includes('near')) {
+        await triggerAiResponse(userText);
+      }
     } catch (err) {
       alert("Comms error: Could not transmit message.");
     }
   };
 
-  const clearHistory = async () => {
-    if (!isSuperAdmin) return;
-    if (window.confirm("FINAL WARNING: Clear global support history? This action is restricted to Super Admins.")) {
-        const querySnapshot = await getDocs(collection(db, "messages"));
-        const deletePromises = querySnapshot.docs.map(d => deleteDoc(d.ref));
-        await Promise.all(deletePromises);
+  const triggerAiResponse = async (prompt: string) => {
+    setIsAiThinking(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      
+      // Get current location for grounding
+      let locationData = { latitude: 6.1957, longitude: 6.7296 }; // Default Asaba
+      try {
+        const pos = await new Promise<GeolocationPosition>((res, rej) => 
+          navigator.geolocation.getCurrentPosition(res, rej)
+        );
+        locationData = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      } catch (e) { console.debug("Using default coords"); }
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-lite-latest",
+        contents: prompt,
+        config: {
+          systemInstruction: `You are the CLESTIN LOGISTICS AI dispatcher. Help users with logistics and location queries in Asaba, Nigeria. Use Google Maps grounding to provide accurate place information. Current business: ${systemSettings.businessName}.`,
+          tools: [{ googleMaps: {} }],
+          toolConfig: {
+            retrievalConfig: {
+              latLng: locationData
+            }
+          }
+        },
+      });
+
+      const aiText = response.text || "I'm analyzing the map data for you...";
+      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      
+      const mapLinks = groundingChunks
+        .filter((chunk: any) => chunk.maps)
+        .map((chunk: any) => ({
+          title: chunk.maps.title,
+          uri: chunk.maps.uri
+        }));
+
+      await pushData('messages', {
+        senderId: 'ai-dispatcher',
+        senderName: 'CLESTIN AI',
+        text: aiText,
+        isAdmin: true,
+        mapLinks: mapLinks,
+        timestamp: new Date()
+      });
+    } catch (error) {
+      console.error("AI Error:", error);
+    } finally {
+      setIsAiThinking(false);
     }
   };
 
@@ -85,103 +119,66 @@ const ChatWidget: React.FC = () => {
       {isOpen && (
         <div className="bg-white dark:bg-slate-900 w-80 md:w-96 h-[550px] rounded-3xl shadow-2xl flex flex-col border border-slate-200 dark:border-slate-800 mb-4 overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
           <div className="bg-indigo-600 p-5 flex justify-between items-center text-white">
-            <div>
-                <h3 className="font-bold font-outfit uppercase text-xs tracking-widest">Global Comms Hub</h3>
-                <p className="text-[10px] opacity-70">Secured Node Protocol</p>
+            <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg"><MapIcon className="w-4 h-4" /></div>
+                <div>
+                    <h3 className="font-bold font-outfit uppercase text-xs tracking-widest">Logistics Intelligence</h3>
+                    <p className="text-[10px] opacity-70">Google Maps Grounding Active</p>
+                </div>
             </div>
-            {isSuperAdmin && chatHistory.length > 0 && (
-                <button onClick={clearHistory} className="bg-white/10 px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter hover:bg-rose-500 transition-colors">Wipe History</button>
+            {isSuperAdmin && (
+                <button onClick={() => {}} className="bg-white/10 px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter hover:bg-rose-500 transition-colors">Clear</button>
             )}
           </div>
           
-          <div 
-            ref={scrollRef}
-            className="flex-grow p-4 space-y-4 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950/50"
-          >
-            {chatHistory.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-8">
-                    <div className="w-12 h-12 bg-indigo-500/10 text-indigo-500 rounded-full flex items-center justify-center mb-3">
-                        <ChatBubbleIcon className="w-6 h-6" />
+          <div ref={scrollRef} className="flex-grow p-4 space-y-4 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950/50">
+            {chatHistory.map((msg) => (
+                <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser?.id ? 'items-end' : 'items-start'}`}>
+                    <div className={`max-w-[85%] p-3 rounded-2xl text-xs font-medium shadow-sm ${
+                        msg.senderId === currentUser?.id 
+                            ? 'bg-indigo-600 text-white rounded-tr-none' 
+                            : msg.senderId === 'ai-dispatcher'
+                                ? 'bg-indigo-500 text-white rounded-tl-none border border-indigo-400'
+                                : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-tl-none'
+                    }`}>
+                        <p className="whitespace-pre-wrap">{msg.text}</p>
+                        
+                        {msg.mapLinks && msg.mapLinks.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-white/20 space-y-2">
+                             <p className="text-[9px] font-black uppercase tracking-widest opacity-80">Map References:</p>
+                             {msg.mapLinks.map((link: any, idx: number) => (
+                               <a key={idx} href={link.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all">
+                                 <MapIcon className="w-3 h-3" />
+                                 <span className="truncate font-bold text-[10px]">{link.title}</span>
+                               </a>
+                             ))}
+                          </div>
+                        )}
                     </div>
-                    <p className="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
-                        {isAdmin ? 'No active support requests found in the queue.' : 'Encrypted link established. Type below to reach support.'}
-                    </p>
+                    <span className="text-[8px] font-black uppercase text-slate-400 mt-1 px-1 tracking-tighter">
+                        {msg.senderName}
+                    </span>
                 </div>
-            ) : (
-                chatHistory.map((msg) => (
-                    <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser?.id ? 'items-end' : 'items-start'}`}>
-                        <div className={`max-w-[85%] p-3 rounded-2xl text-xs font-medium shadow-sm ${
-                            msg.senderId === currentUser?.id 
-                                ? 'bg-indigo-600 text-white rounded-tr-none' 
-                                : msg.isAdmin 
-                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-tl-none'
-                                    : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-tl-none'
-                        }`}>
-                            {msg.attachment && (
-                              <div className="mb-2">
-                                {msg.attachment.type.startsWith('image/') ? (
-                                  <img src={msg.attachment.data} className="rounded-lg max-h-48 w-full object-cover cursor-pointer hover:opacity-90" alt="Attachment" onClick={() => window.open(msg.attachment.data)} />
-                                ) : (
-                                  <a href={msg.attachment.data} download={msg.attachment.name} className="flex items-center gap-2 p-2 bg-black/10 rounded-lg hover:bg-black/20">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/></svg>
-                                    <span className="truncate max-w-[120px] text-[10px]">{msg.attachment.name}</span>
-                                  </a>
-                                )}
-                              </div>
-                            )}
-                            <p>{msg.text}</p>
-                        </div>
-                        <span className="text-[8px] font-black uppercase text-slate-400 mt-1 px-1 tracking-tighter">
-                            {msg.senderName} • {msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}
-                        </span>
-                    </div>
-                ))
-            )}
-          </div>
-          
-          <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 relative">
-            {pendingFile && (
-              <div className="absolute bottom-full left-4 right-4 mb-2 bg-white dark:bg-slate-800 p-2 rounded-xl shadow-xl border border-indigo-500/30 flex items-center gap-3 animate-in slide-in-from-bottom-2">
-                <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-950 overflow-hidden flex-shrink-0">
-                  {pendingFile.type.startsWith('image/') ? (
-                    <img src={pendingFile.data} className="w-full h-full object-cover" alt="Preview" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-400">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/></svg>
-                    </div>
-                  )}
-                </div>
-                <div className="flex-grow min-w-0">
-                  <p className="text-[10px] font-bold text-slate-800 dark:text-white truncate">{pendingFile.name}</p>
-                  <p className="text-[8px] text-slate-500 uppercase">Ready to upload</p>
-                </div>
-                <button type="button" onClick={() => setPendingFile(null)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-rose-500">
-                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
+            ))}
+            {isAiThinking && (
+              <div className="flex items-center gap-2 text-indigo-500 animate-pulse p-2">
+                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
+                <span className="text-[10px] font-black uppercase tracking-widest">Consulting Maps...</span>
               </div>
             )}
+          </div>
+          
+          <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
             <div className="flex items-center gap-2">
-                <button 
-                  type="button" 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-2.5 text-slate-400 hover:text-indigo-500 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 transition-all"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
-                </button>
-                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.pdf" />
                 <div className="relative flex-grow">
                   <input 
                       type="text" 
                       value={inputText}
                       onChange={(e) => setInputText(e.target.value)}
-                      placeholder={isAdmin ? "Type response..." : "Ask Support..."}
+                      placeholder="Ask about locations in Asaba..."
                       className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all pr-12 text-slate-900 dark:text-white font-medium" 
                   />
-                  <button 
-                      type="submit"
-                      disabled={!inputText.trim() && !pendingFile}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 rounded-xl transition-all disabled:opacity-30"
-                  >
+                  <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-indigo-600 dark:text-indigo-400 disabled:opacity-30">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                   </button>
                 </div>
@@ -189,18 +186,8 @@ const ChatWidget: React.FC = () => {
           </form>
         </div>
       )}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`p-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 flex items-center justify-center relative ${
-            isOpen ? 'bg-slate-900 text-white rotate-90' : 'bg-indigo-600 text-white'
-        }`}
-        aria-label="Toggle chat"
-      >
-        {isOpen ? (
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
-        ) : (
-            <ChatBubbleIcon className="w-8 h-8" />
-        )}
+      <button onClick={() => setIsOpen(!isOpen)} className={`p-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 flex items-center justify-center ${isOpen ? 'bg-slate-900 text-white' : 'bg-indigo-600 text-white'}`}>
+        {isOpen ? <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg> : <ChatBubbleIcon className="w-8 h-8" />}
       </button>
     </div>
   );
