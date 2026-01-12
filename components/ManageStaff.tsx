@@ -11,8 +11,9 @@ const ManageStaff: React.FC = () => {
     const [deleteSearch, setDeleteSearch] = useState('');
 
     const isSuperAdmin = currentUser?.role === Role.SuperAdmin;
+    const isAdmin = currentUser?.role === Role.Admin || isSuperAdmin;
 
-    // Filter logic: Ensure accounts are mutually exclusive between active, pending, and deleted
+    // Filter logic: Mutually exclusive groups
     const pendingUsers = allUsers.filter(u => u.active === false && u.isDeleted !== true);
     const activeUsers = allUsers.filter(u => u.active === true && u.isDeleted !== true);
     const deletedUsers = allUsers.filter(u => u.isDeleted === true);
@@ -51,8 +52,9 @@ const ManageStaff: React.FC = () => {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Action Feedback Toast */}
             {actionMessage.text && (
-                <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-50 px-8 py-4 rounded-2xl shadow-2xl font-bold text-sm border backdrop-blur-md ${
+                <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-50 px-8 py-4 rounded-2xl shadow-2xl font-bold text-sm border backdrop-blur-md animate-in slide-in-from-top-4 ${
                     actionMessage.type === 'error' ? 'bg-rose-500 text-white border-rose-400' : 
                     actionMessage.type === 'success' ? 'bg-emerald-500 text-white border-emerald-400' : 
                     'bg-slate-900 text-white border-slate-700'
@@ -76,25 +78,177 @@ const ManageStaff: React.FC = () => {
                         }`}
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                        {showDeleted ? 'Back to Live Fleet' : `Recycle Bin (${deletedUsers.length})`}
+                        {showDeleted ? 'Back to Live Fleet' : `Archive Bin (${deletedUsers.length})`}
                     </button>
                 )}
             </div>
 
+            {!showDeleted && (
+                <>
+                    {/* Pending Approvals Section */}
+                    {isAdmin && pendingUsers.length > 0 && (
+                        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 p-8 rounded-3xl animate-in slide-in-from-top-4">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-10 h-10 bg-amber-500 text-white rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-amber-900 dark:text-amber-400 uppercase tracking-tight">Enrollment Verification</h2>
+                                    <p className="text-[10px] text-amber-600 dark:text-amber-500/70 font-bold uppercase tracking-widest">New accounts awaiting system clearance</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {pendingUsers.map(u => (
+                                    <div key={u.id} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-amber-300 dark:border-amber-900/40 shadow-xl relative overflow-hidden group">
+                                        <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 -mr-8 -mt-8 rounded-full"></div>
+                                        <p className="font-bold text-slate-900 dark:text-white text-lg leading-tight">{u.name}</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">{u.role}</span>
+                                            <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                                            <span className="text-[10px] text-slate-400 font-mono">{u.phone}</span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 mt-3 italic truncate border-t border-slate-50 dark:border-slate-800 pt-3">{u.email}</p>
+                                        <div className="flex gap-2 mt-6">
+                                            <button 
+                                                onClick={() => wrapAction(u.id, () => handleApproveUser(u.id), 'Account verified successfully.')} 
+                                                disabled={isUpdating === u.id} 
+                                                className="flex-1 bg-emerald-600 text-white text-[10px] font-black py-3 rounded-xl hover:bg-emerald-500 transition-all uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center"
+                                            >
+                                                {isUpdating === u.id ? <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : 'Approve Access'}
+                                            </button>
+                                            <button 
+                                                onClick={() => wrapAction(u.id, () => handleArchiveUser(u.id), 'Registration rejected.')} 
+                                                disabled={isUpdating === u.id} 
+                                                className="px-4 bg-rose-50 dark:bg-rose-500/10 text-rose-600 text-[10px] font-black py-3 rounded-xl hover:bg-rose-100 transition-all uppercase tracking-widest border border-rose-200 dark:border-rose-900/40"
+                                            >
+                                                Reject
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Active Registry Table */}
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-colors">
+                        <div className="px-8 py-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-950/20 flex justify-between items-center">
+                            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Live Personnel Node</h3>
+                            <span className="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 text-[9px] font-bold px-2.5 py-1 rounded-full border border-indigo-100 dark:border-indigo-500/20">
+                                {activeUsers.length} Verified Accounts
+                            </span>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead className="text-slate-400 font-bold uppercase tracking-widest text-[9px] border-b border-slate-100 dark:border-slate-800">
+                                    <tr>
+                                        <th className="px-8 py-5">Personnel</th>
+                                        <th className="px-8 py-5">Authority</th>
+                                        <th className="px-8 py-5">Fleet Assets</th>
+                                        <th className="px-8 py-5 text-right">Control</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                                    {activeUsers.length === 0 ? (
+                                        <tr><td colSpan={4} className="px-8 py-12 text-center text-slate-400 italic">No verified personnel found in the active registry.</td></tr>
+                                    ) : activeUsers.map(user => (
+                                        <tr key={user.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                                            <td className="px-8 py-5">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden flex-shrink-0">
+                                                        {user.profilePicture ? <img src={user.profilePicture} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs font-bold uppercase">{user.name.charAt(0)}</div>}
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-slate-900 dark:text-white leading-tight">{user.name}</div>
+                                                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">{user.email || user.phone}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-5">
+                                                {isSuperAdmin && user.id !== currentUser?.id ? (
+                                                    <select 
+                                                        value={user.role}
+                                                        onChange={(e) => wrapAction(user.id, () => handleUpdateUser(user.id, { role: e.target.value as Role }), 'Authority level modified.')}
+                                                        className="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-500/20 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500/50"
+                                                    >
+                                                        {Object.values(Role).map(role => (
+                                                            <option key={role} value={role}>{role}</option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    <span className="font-bold text-indigo-600 dark:text-indigo-400 text-[10px] uppercase tracking-widest bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-500/20">
+                                                        {user.role}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-8 py-5">
+                                                {user.role === Role.Rider ? (
+                                                    <div className="flex flex-col gap-2 max-w-[200px]">
+                                                        <div className="flex gap-2">
+                                                            <input 
+                                                                type="text" 
+                                                                placeholder="Vehicle ID" 
+                                                                defaultValue={user.vehicle}
+                                                                onBlur={(e) => wrapAction(user.id, () => handleUpdateUser(user.id, { vehicle: e.target.value }), 'Asset ID synced.')}
+                                                                className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg text-[10px] border border-slate-200 dark:border-slate-700 flex-1 outline-none focus:border-indigo-500 transition-colors"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <select 
+                                                                defaultValue={user.riderStatus || 'Offline'}
+                                                                onChange={(e) => wrapAction(user.id, () => handleUpdateUser(user.id, { riderStatus: e.target.value as RiderStatus }), 'Availability status shifted.')}
+                                                                className={`p-2 rounded-lg text-[9px] font-black uppercase tracking-widest border-none outline-none cursor-pointer flex-grow ${getRiderStatusColor(user.riderStatus)}`}
+                                                            >
+                                                                <option value="Available">Available</option>
+                                                                <option value="On Delivery">On Delivery</option>
+                                                                <option value="Offline">Offline</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-slate-300 dark:text-slate-700 italic text-[10px] font-medium">Non-Fleet Operations</span>
+                                                )}
+                                            </td>
+                                            <td className="px-8 py-5 text-right">
+                                                {isSuperAdmin && user.id !== currentUser?.id && (
+                                                    <button 
+                                                        onClick={() => {
+                                                            if (window.confirm(`Are you sure you want to archive ${user.name}? They will lose all portal access immediately.`)) {
+                                                                wrapAction(user.id, () => handleArchiveUser(user.id), 'Account moved to archive bin.');
+                                                            }
+                                                        }} 
+                                                        disabled={isUpdating === user.id}
+                                                        className="text-rose-500 p-3 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all group"
+                                                        title="Archive User"
+                                                    >
+                                                        <svg className="w-5 h-5 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Archive View */}
             {isSuperAdmin && showDeleted && (
                 <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 p-8 rounded-3xl animate-in slide-in-from-top-4">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                         <div>
                             <h2 className="text-xl font-bold text-rose-900 dark:text-rose-400 uppercase tracking-tight flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse"></span>
-                                Archived Accounts
+                                Deactivated Accounts
                             </h2>
-                            <p className="text-[10px] text-rose-600 dark:text-rose-500/70 font-bold uppercase tracking-widest mt-1">Search or restore logically deleted personnel</p>
+                            <p className="text-[10px] text-rose-600 dark:text-rose-500/70 font-bold uppercase tracking-widest mt-1">Registry of suspended or terminated access</p>
                         </div>
                         <div className="relative w-full md:w-72">
                             <input 
                                 type="text" 
-                                placeholder="Search by email..." 
+                                placeholder="Filter archive..." 
                                 value={deleteSearch}
                                 onChange={(e) => setDeleteSearch(e.target.value)}
                                 className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/40 rounded-xl text-xs outline-none focus:ring-2 focus:ring-rose-500/50 text-slate-900 dark:text-white shadow-sm"
@@ -104,8 +258,11 @@ const ManageStaff: React.FC = () => {
                     </div>
                     
                     {filteredDeleted.length === 0 ? (
-                        <div className="text-center py-12 border-2 border-dashed border-rose-200 dark:border-rose-900/30 rounded-2xl">
-                            <p className="text-sm text-rose-400 italic font-medium">No results for "{deleteSearch}". Ensure the account was marked as deleted.</p>
+                        <div className="text-center py-16 border-2 border-dashed border-rose-200 dark:border-rose-900/30 rounded-3xl">
+                            <div className="w-16 h-16 bg-rose-100 dark:bg-rose-500/5 text-rose-300 dark:text-rose-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </div>
+                            <p className="text-sm text-rose-400 italic font-medium uppercase tracking-widest">Archive empty</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -120,15 +277,15 @@ const ManageStaff: React.FC = () => {
                                                 <p className="font-bold text-slate-900 dark:text-white text-lg leading-tight">{u.name}</p>
                                                 <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest mt-1">{u.role}</p>
                                             </div>
-                                            <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-500/10 text-rose-600 text-[8px] font-black uppercase rounded">Status: Deleted</span>
+                                            <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-500/10 text-rose-600 text-[8px] font-black uppercase rounded">Inactive</span>
                                         </div>
-                                        <p className="text-[10px] text-slate-400 mt-2 font-mono truncate bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded border border-slate-100 dark:border-slate-800">{u.email || u.phone}</p>
+                                        <p className="text-[10px] text-slate-400 mt-3 font-mono truncate bg-slate-50 dark:bg-slate-800/50 p-2 rounded border border-slate-100 dark:border-slate-800">{u.email || u.phone}</p>
                                         <button 
-                                            onClick={() => wrapAction(u.id, () => handleRestoreUser(u.id), 'Identity successfully restored.')} 
+                                            onClick={() => wrapAction(u.id, () => handleRestoreUser(u.id), 'Account successfully restored to active service.')} 
                                             disabled={isUpdating === u.id}
-                                            className="w-full mt-6 bg-indigo-600 text-white text-[10px] font-black py-3.5 rounded-xl hover:bg-indigo-500 transition-all uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/20 active:scale-95 flex items-center justify-center gap-2"
+                                            className="w-full mt-6 bg-indigo-600 text-white text-[10px] font-black py-4 rounded-xl hover:bg-indigo-500 transition-all uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/20 active:scale-95 flex items-center justify-center gap-2"
                                         >
-                                            {isUpdating === u.id ? 'Syncing...' : 'Restore Identity'}
+                                            {isUpdating === u.id ? <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : 'Restore Account'}
                                         </button>
                                     </div>
                                 </div>
@@ -136,130 +293,6 @@ const ManageStaff: React.FC = () => {
                         </div>
                     )}
                 </div>
-            )}
-
-            {!showDeleted && (
-                <>
-                    {isSuperAdmin && pendingUsers.length > 0 && (
-                        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 p-8 rounded-3xl animate-in slide-in-from-top-4">
-                            <h2 className="text-xl font-bold text-amber-900 dark:text-amber-400 uppercase tracking-tight mb-6 flex items-center gap-2">
-                                <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                                Enrollment Verification
-                            </h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {pendingUsers.map(u => (
-                                    <div key={u.id} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-amber-200 dark:border-amber-900/30 shadow-sm">
-                                        <p className="font-bold text-slate-900 dark:text-white text-lg">{u.name}</p>
-                                        <p className="text-[10px] text-slate-500 uppercase font-black mt-1 tracking-widest">{u.role}</p>
-                                        <p className="text-[10px] text-slate-400 mt-2 font-mono truncate">{u.email || u.phone}</p>
-                                        <div className="flex gap-2 mt-6">
-                                            <button onClick={() => wrapAction(u.id, () => handleApproveUser(u.id), 'Account verified.')} disabled={isUpdating === u.id} className="flex-1 bg-emerald-600 text-white text-[10px] font-black py-3 rounded-xl hover:bg-emerald-500 transition-colors uppercase tracking-widest">Verify</button>
-                                            <button onClick={() => wrapAction(u.id, () => handleArchiveUser(u.id), 'Access rejected.')} disabled={isUpdating === u.id} className="flex-1 bg-white dark:bg-slate-800 text-rose-600 border border-rose-100 dark:border-rose-900/50 text-[10px] font-black py-3 rounded-xl hover:bg-rose-50 transition-colors uppercase tracking-widest">Reject</button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-x-auto transition-colors">
-                        <table className="w-full text-left text-sm">
-                            <thead className="text-slate-500 font-bold uppercase tracking-widest text-[10px] bg-slate-50/50 dark:bg-slate-950/50">
-                                <tr>
-                                    <th className="px-6 py-4">Employee Identity</th>
-                                    <th className="px-6 py-4">Authorization</th>
-                                    <th className="px-6 py-4">Fleet Telemetry (Riders)</th>
-                                    <th className="px-6 py-4 text-right">Registry Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                {activeUsers.length === 0 ? (
-                                    <tr><td colSpan={4} className="px-6 py-10 text-center text-slate-400 italic">No active verified personnel in the registry.</td></tr>
-                                ) : activeUsers.map(user => (
-                                    <tr key={user.id} className="hover:bg-slate-50/30 dark:hover:bg-slate-800/20 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="font-bold text-slate-900 dark:text-white">{user.name}</div>
-                                            <div className="text-[10px] text-slate-400 font-mono">{user.email || user.phone}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {isSuperAdmin && user.id !== currentUser?.id ? (
-                                                <select 
-                                                    value={user.role}
-                                                    onChange={(e) => wrapAction(user.id, () => handleUpdateUser(user.id, { role: e.target.value as Role }), 'Role updated.')}
-                                                    className="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-[11px] uppercase tracking-tighter px-2 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-500/20 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500"
-                                                >
-                                                    {Object.values(Role).map(role => (
-                                                        <option key={role} value={role}>{role}</option>
-                                                    ))}
-                                                </select>
-                                            ) : (
-                                                <span className="font-bold text-indigo-600 dark:text-indigo-400 text-[11px] uppercase tracking-tighter bg-indigo-50 dark:bg-indigo-500/10 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-500/20">
-                                                    {user.role}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {user.role === Role.Rider ? (
-                                                <div className="flex flex-col gap-2 max-w-[220px]">
-                                                    <div className="flex gap-2">
-                                                        <input 
-                                                            type="text" 
-                                                            placeholder="Vehicle" 
-                                                            defaultValue={user.vehicle}
-                                                            onBlur={(e) => wrapAction(user.id, () => handleUpdateUser(user.id, { vehicle: e.target.value }), 'Vehicle sync.')}
-                                                            className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg text-[10px] border border-slate-200 dark:border-slate-700 flex-1 outline-none focus:border-indigo-500 transition-colors"
-                                                        />
-                                                        <input 
-                                                            type="text" 
-                                                            placeholder="License" 
-                                                            defaultValue={user.licenseDetails}
-                                                            onBlur={(e) => wrapAction(user.id, () => handleUpdateUser(user.id, { licenseDetails: e.target.value }), 'License updated.')}
-                                                            className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg text-[10px] border border-slate-200 dark:border-slate-700 flex-1 outline-none focus:border-indigo-500 transition-colors"
-                                                        />
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <select 
-                                                            defaultValue={user.riderStatus || 'Offline'}
-                                                            onChange={(e) => wrapAction(user.id, () => handleUpdateUser(user.id, { riderStatus: e.target.value as RiderStatus }), 'Status shifted.')}
-                                                            className={`p-2 rounded-lg text-[10px] font-bold border-none outline-none cursor-pointer flex-grow ${getRiderStatusColor(user.riderStatus)}`}
-                                                        >
-                                                            <option value="Available">Available</option>
-                                                            <option value="On Delivery">On Delivery</option>
-                                                            <option value="Offline">Offline</option>
-                                                        </select>
-                                                        {user.riderStatus === 'Available' && (
-                                                            <span className="flex h-2 w-2 relative">
-                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <span className="text-slate-300 dark:text-slate-700 italic text-[10px]">Non-Fleet Personnel</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            {(isSuperAdmin || (currentUser?.role === Role.Admin && user.role !== Role.SuperAdmin)) && user.id !== currentUser?.id && (
-                                                <button 
-                                                    onClick={() => {
-                                                        if (window.confirm('Archive this user?')) {
-                                                            wrapAction(user.id, () => handleArchiveUser(user.id), 'Moved to Bin.');
-                                                        }
-                                                    }} 
-                                                    disabled={isUpdating === user.id}
-                                                    className="text-rose-500 p-3 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all group"
-                                                >
-                                                    <svg className="w-5 h-5 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </>
             )}
         </div>
     );
