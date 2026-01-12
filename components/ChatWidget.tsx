@@ -162,9 +162,10 @@ const ChatWidget: React.FC = () => {
   const filteredMessages = messages.filter(m => m.threadId === activeThreadId);
 
   return (
-    <div className="fixed bottom-4 right-4 md:bottom-5 md:right-5 z-50 flex items-end justify-end w-full pointer-events-none">
+    /* Lifted bottom-20 on mobile to clear the Dashboard nav bar (z-70 to stay on top) */
+    <div className="fixed bottom-20 right-4 md:bottom-5 md:right-5 z-[70] flex items-end justify-end w-full pointer-events-none">
       {isOpen && (
-        <div className={`pointer-events-auto bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl shadow-2xl flex flex-col md:flex-row border border-slate-200 dark:border-slate-800 overflow-hidden animate-in slide-in-from-bottom-4 duration-300 ${isAdmin ? 'w-[95vw] md:w-[680px] h-[85vh] md:h-[550px]' : 'w-[95vw] md:w-96 h-[80vh] md:h-[520px]'} mb-2 md:mb-4 mr-1 md:mr-0`}>
+        <div className={`pointer-events-auto bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl shadow-2xl flex flex-col md:flex-row border border-slate-200 dark:border-slate-800 overflow-hidden animate-in slide-in-from-bottom-4 duration-300 ${isAdmin ? 'w-[95vw] md:w-[680px] h-[75vh] md:h-[550px]' : 'w-[95vw] md:w-96 h-[70vh] md:h-[520px]'} mb-2 md:mb-4 mr-1 md:mr-0`}>
           
           {isAdmin && (
             <div className="w-full md:w-56 border-r border-slate-100 dark:border-slate-800 flex flex-col bg-slate-50 dark:bg-slate-950/50 max-h-[20%] md:max-h-full overflow-y-auto border-b md:border-b-0">
@@ -186,20 +187,18 @@ const ChatWidget: React.FC = () => {
           )}
 
           <div className="flex-grow flex flex-col min-w-0 h-full relative">
-            {/* Optimized Mobile Header */}
             <div className="bg-indigo-600 p-3 md:p-4 flex items-center justify-between text-white shrink-0">
               <button onClick={() => setIsOpen(false)} className="p-2 -ml-1 hover:bg-white/10 rounded-xl transition-colors" aria-label="Close Chat">
                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"/></svg>
               </button>
               
-              <div className="flex flex-col items-center flex-grow px-2 overflow-hidden">
-                  <h3 className="font-bold font-outfit uppercase text-[10px] tracking-widest text-center truncate w-full">
+              <div className="flex flex-col items-center flex-grow px-2 overflow-hidden text-center">
+                  <h3 className="font-bold font-outfit uppercase text-[10px] tracking-widest truncate w-full">
                     {isAdmin ? `Chat: ${threads.find(t => t.id === activeThreadId)?.name || 'Active Session'}` : 'Private Support Tunnel'}
                   </h3>
                   <p className="text-[8px] opacity-70 uppercase font-black tracking-tighter truncate w-full text-center">Secure Clestin Protocol</p>
               </div>
 
-              {/* Balance for the left back button */}
               <div className="w-10 flex justify-end">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
               </div>
@@ -207,7 +206,7 @@ const ChatWidget: React.FC = () => {
 
             {indexError && (
               <div className="bg-amber-500 text-white text-[9px] font-bold py-1 px-4 text-center shrink-0">
-                Syncing with secure server...
+                Syncing secure data stream...
               </div>
             )}
             
