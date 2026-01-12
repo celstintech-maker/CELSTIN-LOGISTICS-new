@@ -17,6 +17,7 @@ const Dashboard: React.FC = () => {
   const { currentUser, deliveries, handleUpdateUser } = useContext(AppContext);
   const [activeTab, setActiveTab] = useState('deliveries');
   const [selectedOrderForNav, setSelectedOrderForNav] = useState<Delivery | null>(null);
+  const [currentStreet, setCurrentStreet] = useState<string>('');
 
   const userDeliveries = useMemo(() => deliveries.filter(d => {
     if (currentUser?.role === Role.SuperAdmin || currentUser?.role === Role.Admin) return true;
@@ -31,19 +32,34 @@ const Dashboard: React.FC = () => {
     setActiveTab('map');
   };
 
+  const getStreetName = async (lat: number, lng: number) => {
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+      const data = await response.json();
+      const street = data.address.road || data.address.suburb || data.address.neighbourhood || 'Unknown Street';
+      return street;
+    } catch (error) {
+      console.error("Geocoding error", error);
+      return 'Active Node';
+    }
+  };
+
   const handleClockToggle = async () => {
     if (!currentUser) return;
     const isClockingIn = currentUser.riderStatus !== 'Available';
     
     if (isClockingIn) {
-      // Request location immediately upon clock-in
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+          const street = await getStreetName(coords.lat, coords.lng);
+          setCurrentStreet(street);
+          
           await handleUpdateUser(currentUser.id, { 
             riderStatus: 'Available', 
             location: coords,
-            locationStatus: 'Active'
+            locationStatus: 'Active',
+            vehicle: street // Using vehicle or a custom field to store the street for the dashboard display
           });
         },
         (error) => {
@@ -55,6 +71,7 @@ const Dashboard: React.FC = () => {
         riderStatus: 'Offline',
         locationStatus: 'Disabled'
       });
+      setCurrentStreet('');
     }
   };
 
@@ -137,23 +154,27 @@ const Dashboard: React.FC = () => {
           </div>
           
           {currentUser?.role === Role.Rider && (
-            <div className="flex items-center gap-3">
-              {currentUser.riderStatus === 'Available' && (
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Broadcasting GPS</span>
-                </div>
-              )}
-              <button 
-                onClick={handleClockToggle}
-                className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all transform active:scale-95 shadow-lg ${
-                    currentUser.riderStatus === 'Available' 
-                    ? 'bg-emerald-500 text-white shadow-emerald-500/20 hover:bg-emerald-600' 
-                    : 'bg-slate-200 dark:bg-slate-800 text-slate-500 hover:bg-indigo-600 hover:text-white'
-                }`}
-              >
-                {currentUser.riderStatus === 'Available' ? 'Clocked In' : 'Clock In Now'}
-              </button>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-3">
+                {currentUser.riderStatus === 'Available' && (
+                  <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+                      {currentUser.vehicle ? `At ${currentUser.vehicle}` : 'Broadcasting GPS'}
+                    </span>
+                  </div>
+                )}
+                <button 
+                  onClick={handleClockToggle}
+                  className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all transform active:scale-95 shadow-lg ${
+                      currentUser.riderStatus === 'Available' 
+                      ? 'bg-emerald-500 text-white shadow-emerald-500/20 hover:bg-emerald-600' 
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-500 hover:bg-indigo-600 hover:text-white'
+                  }`}
+                >
+                  {currentUser.riderStatus === 'Available' ? 'Clocked In' : 'Clock In Now'}
+                </button>
+              </div>
             </div>
           )}
         </div>
