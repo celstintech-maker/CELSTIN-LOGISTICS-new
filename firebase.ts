@@ -99,8 +99,6 @@ export const pushData = async (collectionName: string, data: any) => {
 
 export const setProfileData = async (uid: string, data: any) => {
   try {
-    // We use setDoc with merge:true instead of updateDoc 
-    // to ensure the profile is created if it doesn't exist.
     await setDoc(doc(db, "users", uid), {
       ...data,
       updatedAt: serverTimestamp()

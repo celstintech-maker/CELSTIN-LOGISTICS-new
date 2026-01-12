@@ -103,7 +103,6 @@ const App: React.FC = () => {
   const [vendorPerformance, setVendorPerformance] = useState<VendorPerformance[]>(MOCK_VENDORS_PERFORMANCE);
   const [isCloudConnected, setIsCloudConnected] = useState(true);
   const [cloudError, setCloudError] = useState<string | null>(null);
-  const [activeNotification, setActiveNotification] = useState<{title: string, body: string} | null>(null);
   
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
     const saved = localStorage.getItem('clestin_settings');
@@ -130,27 +129,19 @@ const App: React.FC = () => {
     }
   };
 
-  // Hardened Auth Observer
+  // Improved Auth Observer for Speed and Stability
   useEffect(() => {
     const authUnsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        // Track the profile for the logged in user
         const profileUnsub = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
           if (docSnap.exists()) {
             const profile = { id: docSnap.id, ...docSnap.data() } as User;
-            
-            // CRITICAL: Only log in if active AND not deleted
             if (profile.active && !profile.isDeleted) {
               setCurrentUser(profile);
             } else {
-              // If we are unapproved or deleted, we stay at null 
-              // and let the Login component handle its own success screen logic
+              // Only trigger sign out if the profile actually exists but is inactive
+              // If it doesn't exist yet, it's likely a registration in progress
               setCurrentUser(null);
-              // Explicitly sign out if not approved, unless they are currently registering
-              // (which is handled by Login.tsx anyway)
-              if (profile.active === false || profile.isDeleted) {
-                signOut(auth);
-              }
             }
           }
         });
@@ -162,26 +153,21 @@ const App: React.FC = () => {
     return () => authUnsubscribe();
   }, []);
 
-  // Settings Sync
+  // Settings & Data Sync
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
+    const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as SystemSettings;
         setSystemSettings(data);
         localStorage.setItem('clestin_settings', JSON.stringify(data));
       }
     });
-    return () => unsub();
+    const unsubUsers = syncCollection('users', (data) => setAllUsers(data as User[]), (err) => { setIsCloudConnected(false); setCloudError(err.message); });
+    const unsubDeliveries = syncCollection('deliveries', (data) => setDeliveries(data as Delivery[]), (err) => { setIsCloudConnected(false); setCloudError(err.message); });
+    return () => { unsubSettings(); unsubUsers(); unsubDeliveries(); };
   }, []);
 
-  // Data Sync
-  useEffect(() => {
-    const unsubscribeUsers = syncCollection('users', (data) => setAllUsers(data as User[]), (err) => { setIsCloudConnected(false); setCloudError(err.message); });
-    const unsubscribeDeliveries = syncCollection('deliveries', (data) => setDeliveries(data as Delivery[]), (err) => { setIsCloudConnected(false); setCloudError(err.message); });
-    return () => { unsubscribeUsers(); unsubscribeDeliveries(); };
-  }, []);
-
-  // Theme Applier
+  // Theme
   useEffect(() => {
     const root = window.document.documentElement;
     if (systemSettings.theme === 'dark') {
@@ -228,20 +214,6 @@ const App: React.FC = () => {
     <AppContext.Provider value={contextValue}>
       <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 selection:bg-indigo-100 dark:selection:bg-indigo-900/40">
         <Header />
-        
-        {activeNotification && (
-          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-md animate-in slide-in-from-top-10 duration-500">
-            <div className="bg-indigo-600 text-white p-5 rounded-2xl shadow-2xl border border-indigo-400 flex items-start gap-4">
-              <div className="p-2 bg-white/20 rounded-xl"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
-              <div className="flex-grow">
-                <h4 className="font-black uppercase tracking-widest text-[11px] mb-1">{activeNotification.title}</h4>
-                <p className="text-sm font-medium leading-tight">{activeNotification.body}</p>
-              </div>
-              <button onClick={() => setActiveNotification(null)} className="p-1 hover:bg-white/10 rounded-lg"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
-            </div>
-          </div>
-        )}
-
         <main className="flex-grow container mx-auto px-4 py-8 md:px-6 md:py-12">
           {!currentUser ? (
             <div className="space-y-20 max-w-5xl mx-auto">
