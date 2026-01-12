@@ -34,16 +34,13 @@ const Dashboard: React.FC = () => {
 
   const getStreetAndLandmark = async (lat: number, lng: number) => {
     try {
-      // Fetching high-detail address data
       const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
       const data = await response.json();
       const addr = data.address;
       
-      // Attempt to find a recognizable landmark in the data
       const landmark = addr.amenity || addr.building || addr.shop || addr.tourism || addr.historic || addr.office || addr.leisure || data.name;
       const street = addr.road || addr.suburb || addr.neighbourhood || 'Asaba Route';
       
-      // Construct a human-readable live location string
       if (landmark && landmark !== street && !street.includes(landmark)) {
         return `${street} (Near ${landmark})`;
       }
@@ -56,28 +53,48 @@ const Dashboard: React.FC = () => {
 
   // Continuous tracking effect for active riders
   useEffect(() => {
-    let watchId: number;
+    let watchId: number | null = null;
+    
     if (currentUser?.role === Role.Rider && currentUser.riderStatus === 'Available') {
-      watchId = navigator.geolocation.watchPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          const locationString = await getStreetAndLandmark(latitude, longitude);
-          setCurrentStreet(locationString);
-          
-          await handleUpdateUser(currentUser.id, { 
-            location: { lat: latitude, lng: longitude },
-            vehicle: locationString, // Sync location string for global broadcast
-            locationStatus: 'Active'
-          });
-        },
-        (err) => console.error("Watch error", err),
-        { enableHighAccuracy: true }
-      );
+      if ("geolocation" in navigator) {
+        watchId = navigator.geolocation.watchPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            const locationString = await getStreetAndLandmark(latitude, longitude);
+            
+            // Local state for UI feedback
+            setCurrentStreet(locationString);
+            
+            // Broadcast to the entire system via Firebase
+            await handleUpdateUser(currentUser.id, { 
+              location: { lat: latitude, lng: longitude },
+              vehicle: locationString, // Using vehicle field for live location string broadcast
+              locationStatus: 'Active'
+            });
+          },
+          (err) => {
+            console.error("Tracking Error:", err);
+            if (err.code === 1) {
+              alert("GPS Permission Denied. Your movements are not being tracked.");
+            }
+          },
+          { 
+            enableHighAccuracy: true,
+            maximumAge: 1000,
+            timeout: 10000
+          }
+        );
+      } else {
+        alert("Your device does not support geolocation tracking.");
+      }
     }
+
     return () => {
-      if (watchId) navigator.geolocation.clearWatch(watchId);
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
     };
-  }, [currentUser?.role, currentUser?.riderStatus]);
+  }, [currentUser?.role, currentUser?.riderStatus, currentUser?.id]);
 
   const handleClockToggle = async () => {
     if (!currentUser) return;
@@ -97,7 +114,7 @@ const Dashboard: React.FC = () => {
             vehicle: locationString
           });
         },
-        (error) => alert("GPS required to clock in.")
+        (error) => alert("GPS signal required to start shift.")
       );
     } else {
       await handleUpdateUser(currentUser.id, { 
@@ -123,7 +140,7 @@ const Dashboard: React.FC = () => {
     switch (activeTab) {
       case 'deliveries':
         return (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 will-change-transform">
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                 <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4 transition-colors">
                     <div className="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl"><TruckIcon className="w-5 h-5" /></div>
