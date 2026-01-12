@@ -1,23 +1,39 @@
 
 import React, { useState, useContext, useEffect, useRef, useMemo } from 'react';
 import { AppContext } from '../App';
-import { ChatBubbleIcon, MapIcon } from './icons';
+import { ChatBubbleIcon } from './icons';
 import { Role } from '../types';
 import { pushData, db } from '../firebase';
 import { GoogleGenAI } from "@google/genai";
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+
+interface Message {
+  id: string;
+  threadId: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  isAdmin: boolean;
+  timestamp: Timestamp | any;
+}
+
+interface Thread {
+  id: string;
+  name: string;
+  lastText: string;
+  timestamp: Timestamp | any;
+}
 
 const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { currentUser, systemSettings } = useContext(AppContext);
-  const [messages, setMessages] = useState<any[]>([]);
+  const { currentUser } = useContext(AppContext);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [indexError, setIndexError] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Persistence for Guest Users
   const guestId = useMemo(() => {
     let id = localStorage.getItem('clestin_guest_id');
     if (!id) {
@@ -31,24 +47,19 @@ const ChatWidget: React.FC = () => {
   const currentUserId = currentUser?.id || guestId;
   const currentUserName = currentUser?.name || 'Guest User';
 
-  // Sync messages
   useEffect(() => {
     const messagesRef = collection(db, "messages");
     let q;
 
     try {
       if (isAdmin) {
-        // Admins see everything. Order by timestamp requires an index if combined with where.
-        // We use a simple query first to avoid failures if index is missing.
         q = query(messagesRef, orderBy("timestamp", "asc"));
       } else {
-        // Simple query for users to avoid composite index requirements for now
         q = query(messagesRef, where("threadId", "==", currentUserId));
       }
 
       const unsub = onSnapshot(q, (snapshot) => {
-        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Manual sort if index is missing or query is simple
+        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
         const sorted = msgs.sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
         setMessages(sorted);
         setIndexError(false);
@@ -65,7 +76,7 @@ const ChatWidget: React.FC = () => {
 
   const threads = useMemo(() => {
     if (!isAdmin) return [];
-    const uniqueThreads = new Map();
+    const uniqueThreads = new Map<string, Thread>();
     messages.forEach(msg => {
       if (msg.threadId) {
         uniqueThreads.set(msg.threadId, {
@@ -128,7 +139,7 @@ const ChatWidget: React.FC = () => {
         model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
-          systemInstruction: `You are the Dispatch AI for CLESTIN. thread: ${threadId}. Current time: ${new Date().toISOString()}`,
+          systemInstruction: `You are the Dispatch AI for CLESTIN. thread: ${threadId}. Support the user with delivery queries in Asaba.`,
           tools: [{ googleMaps: {} }]
         },
       });
@@ -160,7 +171,7 @@ const ChatWidget: React.FC = () => {
               <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Private Threads</p>
               </div>
-              {threads.length === 0 && <p className="p-4 text-[10px] text-slate-400 italic">No threads yet.</p>}
+              {threads.length === 0 && <p className="p-4 text-[10px] text-slate-400 italic text-center">No active threads</p>}
               {threads.map(t => (
                 <button 
                   key={t.id}
@@ -183,14 +194,14 @@ const ChatWidget: React.FC = () => {
                   <h3 className="font-bold font-outfit uppercase text-[10px] tracking-widest text-center truncate w-full">
                     {isAdmin ? `Chat: ${threads.find(t => t.id === activeThreadId)?.name || 'Active Session'}` : 'Private Support Tunnel'}
                   </h3>
-                  <p className="text-[8px] opacity-70 uppercase font-black tracking-tighter">Verified Private Node</p>
+                  <p className="text-[8px] opacity-70 uppercase font-black tracking-tighter">Secure Clestin Protocol</p>
               </div>
-              <div className="w-10"></div> {/* Spacer for symmetry */}
+              <div className="w-10"></div>
             </div>
 
             {indexError && (
               <div className="bg-amber-500 text-white text-[9px] font-bold py-1 px-4 text-center">
-                Establishing secure data channel... (Index Pending)
+                Syncing with secure server...
               </div>
             )}
             
@@ -211,7 +222,7 @@ const ChatWidget: React.FC = () => {
                       </span>
                   </div>
               ))}
-              {isAiThinking && <div className="text-[8px] font-black uppercase text-indigo-500 animate-pulse px-2">AI is analyzing dispatch signals...</div>}
+              {isAiThinking && <div className="text-[8px] font-black uppercase text-indigo-500 animate-pulse px-2">AI Analyzing fleet...</div>}
             </div>
             
             <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
