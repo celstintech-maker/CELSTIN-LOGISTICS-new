@@ -12,6 +12,12 @@ interface MapViewProps {
   targetOrder?: Delivery | null;
 }
 
+interface PathPoint {
+  lat: number;
+  lng: number;
+  timestamp: number;
+}
+
 const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
   const { systemSettings, currentUser } = useContext(AppContext);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -20,6 +26,10 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
   const markersMapRef = useRef<Map<string, any>>(new Map());
   const prevCoordsRef = useRef<Map<string, {lat: number, lng: number, heading: number}>>(new Map());
   
+  // Historical tracking for paths
+  const riderPathsRef = useRef<Map<string, PathPoint[]>>(new Map());
+  const activePolylineRef = useRef<any>(null);
+
   const [activeRiders, setActiveRiders] = useState<User[]>([]);
   const [selectedRider, setSelectedRider] = useState<User | null>(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -123,6 +133,31 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
     );
   };
 
+  // Update polyline path when selection or paths change
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    if (activePolylineRef.current) {
+      activePolylineRef.current.remove();
+      activePolylineRef.current = null;
+    }
+
+    if (selectedRider) {
+      const path = riderPathsRef.current.get(selectedRider.id) || [];
+      if (path.length > 1) {
+        const latLngs = path.map(p => [p.lat, p.lng]);
+        activePolylineRef.current = L.polyline(latLngs, {
+          color: '#4f46e5',
+          weight: 5,
+          opacity: 0.8,
+          lineJoin: 'round',
+          dashArray: '1, 10',
+          className: 'logistics-path-animation'
+        }).addTo(mapRef.current);
+      }
+    }
+  }, [selectedRider, activeRiders]);
+
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
       const isDark = systemSettings.theme === 'dark';
@@ -173,6 +208,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       
       const activeIds = new Set<string>();
       const ridersList: User[] = [];
+      const now = Date.now();
 
       snapshot.docs.forEach(doc => {
         const data = doc.data();
@@ -188,6 +224,19 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         activeIds.add(rider.id);
         const position: [number, number] = [lat, lng];
         
+        // Track Path Movement (1 Hour History)
+        let currentPath = riderPathsRef.current.get(rider.id) || [];
+        const lastPoint = currentPath[currentPath.length - 1];
+        
+        // Only add if position changed significantly or first point
+        if (!lastPoint || Math.abs(lastPoint.lat - lat) > 0.0001 || Math.abs(lastPoint.lng - lng) > 0.0001) {
+            currentPath.push({ lat, lng, timestamp: now });
+        }
+        
+        // Purge points older than 1 hour (3600000 ms)
+        currentPath = currentPath.filter(p => now - p.timestamp < 3600000);
+        riderPathsRef.current.set(rider.id, currentPath);
+
         const prev = prevCoordsRef.current.get(rider.id);
         const isMoving = prev && (Math.abs(prev.lat - lat) > 0.00001 || Math.abs(prev.lng - lng) > 0.00001);
         const heading = isMoving ? calculateHeading(prev!, {lat, lng}) : (prev?.heading || 0);
@@ -229,11 +278,12 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         }
       });
 
-      // Cleanup stale markers
+      // Cleanup stale markers and paths
       markersMapRef.current.forEach((marker, id) => {
         if (!activeIds.has(id)) {
           marker.remove();
           markersMapRef.current.delete(id);
+          riderPathsRef.current.delete(id);
         }
       });
       
@@ -383,7 +433,13 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{selectedRider.riderStatus}</span>
                   </div>
                   <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Current Street</p>
+                    <div className="flex justify-between items-center mb-1">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Current Street</p>
+                        <div className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                            <span className="text-[8px] font-black text-indigo-500 uppercase">Path Telemetry</span>
+                        </div>
+                    </div>
                     <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200 leading-snug">📍 {selectedRider.vehicle || 'Unknown'}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3 mt-6">
@@ -421,6 +477,17 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         .is-off .beacon-pulse { display: none; }
         .is-off .beacon-core { filter: grayscale(1); opacity: 0.7; }
         @keyframes beacon-ping { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(3.5); opacity: 0; } }
+        
+        .logistics-path-animation {
+            stroke-dashoffset: 20;
+            animation: dash 10s linear infinite;
+            filter: drop-shadow(0 0 3px rgba(79, 70, 229, 0.4));
+        }
+        @keyframes dash {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
       `}</style>
     </div>
   );
