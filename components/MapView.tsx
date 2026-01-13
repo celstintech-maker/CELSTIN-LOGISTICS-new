@@ -415,4 +415,13 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         .beacon-img { width: 100%; height: 100%; object-fit: cover; transform: rotate(45deg); }
         .beacon-initial { transform: rotate(45deg); font-weight: 900; font-size: 14px; }
         .beacon-pointer { position: absolute; bottom: 0px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid; z-index: 5; }
-        .beacon-vector { position: absolute; top: 50%; left: 50%; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 20px solid; transform-origin: center; opacity: 0
+        .beacon-vector { position: absolute; top: 50%; left: 50%; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 20px solid; transform-origin: center; opacity: 0.4; z-index: 2; margin-top: -32px; }
+        .is-off .beacon-pulse { display: none; }
+        .is-off .beacon-core { filter: grayscale(1); opacity: 0.7; }
+        @keyframes beacon-ping { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(3.5); opacity: 0; } }
+      `}</style>
+    </div>
+  );
+};
+
+export default MapView;
