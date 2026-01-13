@@ -40,10 +40,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
+// Using experimentalForceLongPolling to improve reliability on networks with weak WebSocket support
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager()
-  })
+  }),
+  experimentalForceLongPolling: true
 });
 
 export const auth = getAuth(app);
@@ -66,7 +68,8 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
 
 export const syncCollection = (collectionName: string, callback: (data: any[]) => void, onError?: (err: any) => void) => {
   const q = query(collection(db, collectionName));
-  return onSnapshot(q, (snapshot) => {
+  // Added includeMetadataChanges to ensure UI updates even when data is served from local cache
+  return onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     callback(data);
   }, (error: any) => {

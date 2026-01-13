@@ -44,7 +44,7 @@ const Dashboard: React.FC = () => {
       const road = addr.road || addr.suburb || addr.neighbourhood || 'Asaba Main Way';
       
       if (landmark && landmark !== road && !road.includes(landmark)) {
-        return `${road} (Near ${landmark})`;
+        return `${road} (${landmark})`;
       }
       return road;
     } catch (error) {
@@ -65,7 +65,7 @@ const Dashboard: React.FC = () => {
         
         await handleUpdateUser(currentUser.id, { 
           location: { lat: latitude, lng: longitude },
-          vehicle: exactAddress, // Broadcasted address stored in vehicle for global visibility
+          vehicle: exactAddress, 
           locationStatus: 'Active'
         });
         
@@ -73,7 +73,7 @@ const Dashboard: React.FC = () => {
       },
       (err) => {
         setIsSyncing(false);
-        alert("GPS Signal Blocked. Please check permissions.");
+        console.error("GPS Signal Blocked", err);
       },
       { enableHighAccuracy: true }
     );
@@ -88,27 +88,28 @@ const Dashboard: React.FC = () => {
         watchId = navigator.geolocation.watchPosition(
           async (position) => {
             const { latitude, longitude } = position.coords;
-            // Reverse geocode to get the actual street name in real-time
             const exactAddress = await getStreetAndLandmark(latitude, longitude);
             
             await handleUpdateUser(currentUser.id, { 
               location: { lat: latitude, lng: longitude },
-              vehicle: exactAddress, // Using this field to broadcast live address to all admins
+              vehicle: exactAddress,
               locationStatus: 'Active'
             });
           },
-          (err) => console.error("Tracking Error:", err),
+          (err) => console.error("Live Tracking Error:", err),
           { 
             enableHighAccuracy: true,
-            maximumAge: 5000,
-            timeout: 15000
+            maximumAge: 3000,
+            timeout: 10000
           }
         );
       }
     }
 
     return () => {
-      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
     };
   }, [currentUser?.role, currentUser?.riderStatus, currentUser?.id]);
 
@@ -135,7 +136,7 @@ const Dashboard: React.FC = () => {
       await handleUpdateUser(currentUser.id, { 
         riderStatus: 'Offline',
         locationStatus: 'Disabled',
-        vehicle: '' 
+        vehicle: 'Offline' 
       });
     }
   };
@@ -226,12 +227,12 @@ const Dashboard: React.FC = () => {
                     <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 mb-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                       <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
-                        Telemetry Broadcast Active
+                        Telemetry Online
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase italic bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-800 shadow-sm max-w-[200px] truncate">
-                        📍 {currentUser.vehicle || 'Resolving Street Address...'}
+                        📍 {currentUser.vehicle && currentUser.vehicle !== 'Offline' ? currentUser.vehicle : 'Acquiring Street Address...'}
                       </p>
                       <button 
                         onClick={handleManualSync}
@@ -241,7 +242,7 @@ const Dashboard: React.FC = () => {
                           ? 'bg-emerald-500 text-white border-emerald-400 animate-pulse' 
                           : 'bg-white dark:bg-slate-800 text-indigo-600 border-indigo-100 dark:border-slate-700 hover:scale-110 active:scale-95 shadow-sm'
                         }`}
-                        title="Force Position Broadcast"
+                        title="Force Location Update"
                       >
                         <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -258,7 +259,7 @@ const Dashboard: React.FC = () => {
                       : 'bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700'
                   }`}
                 >
-                  {currentUser.riderStatus === 'Available' ? 'End Shift' : 'Start Shift'}
+                  {currentUser.riderStatus === 'Available' ? 'Go Offline' : 'Start Duty'}
                 </button>
               </div>
             </div>
