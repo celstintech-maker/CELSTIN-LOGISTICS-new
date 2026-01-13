@@ -86,6 +86,7 @@ export interface Delivery {
   estimatedMinutes?: number;
   transportMode?: VehicleMode;
   timeModifiedByAdmin?: boolean;
+  riderPaymentVerified?: boolean;
   createdAt: any; 
 }
 
