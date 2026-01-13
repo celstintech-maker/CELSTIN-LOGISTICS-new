@@ -179,6 +179,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         const rider = { id: doc.id, ...data } as User;
         ridersList.push(rider);
         
+        // Robust coordinate parsing
         const lat = typeof rider.location?.lat === 'number' ? rider.location.lat : parseFloat(rider.location?.lat as any);
         const lng = typeof rider.location?.lng === 'number' ? rider.location.lng : parseFloat(rider.location?.lng as any);
         
@@ -228,6 +229,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         }
       });
 
+      // Cleanup stale markers
       markersMapRef.current.forEach((marker, id) => {
         if (!activeIds.has(id)) {
           marker.remove();

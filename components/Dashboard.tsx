@@ -83,7 +83,10 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     let watchId: number | null = null;
     
+    // Immediate broadcast on mount if rider is already Available
     if (currentUser?.role === Role.Rider && currentUser.riderStatus === 'Available') {
+      handleManualSync();
+      
       if ("geolocation" in navigator) {
         watchId = navigator.geolocation.watchPosition(
           async (position) => {
@@ -99,8 +102,8 @@ const Dashboard: React.FC = () => {
           (err) => console.error("Live Tracking Error:", err),
           { 
             enableHighAccuracy: true,
-            maximumAge: 3000,
-            timeout: 10000
+            maximumAge: 1000, // Reduced age for fresher data
+            timeout: 15000
           }
         );
       }
@@ -118,6 +121,7 @@ const Dashboard: React.FC = () => {
     const isClockingIn = currentUser.riderStatus !== 'Available';
     
     if (isClockingIn) {
+      setIsSyncing(true);
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
@@ -129,8 +133,13 @@ const Dashboard: React.FC = () => {
             locationStatus: 'Active',
             vehicle: exactAddress
           });
+          setIsSyncing(false);
         },
-        () => alert("GPS signal required to begin shift.")
+        () => {
+          setIsSyncing(false);
+          alert("GPS signal required to begin shift.");
+        },
+        { enableHighAccuracy: true }
       );
     } else {
       await handleUpdateUser(currentUser.id, { 
@@ -253,13 +262,14 @@ const Dashboard: React.FC = () => {
                 )}
                 <button 
                   onClick={handleClockToggle}
+                  disabled={isSyncing}
                   className={`w-full md:w-auto px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all transform active:scale-95 shadow-lg ${
                       currentUser.riderStatus === 'Available' 
                       ? 'bg-rose-600 text-white shadow-rose-500/20 hover:bg-rose-700' 
                       : 'bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700'
-                  }`}
+                  } ${isSyncing ? 'opacity-50 cursor-wait' : ''}`}
                 >
-                  {currentUser.riderStatus === 'Available' ? 'Go Offline' : 'Start Duty'}
+                  {isSyncing ? 'Syncing...' : (currentUser.riderStatus === 'Available' ? 'Go Offline' : 'Start Duty')}
                 </button>
               </div>
             </div>
