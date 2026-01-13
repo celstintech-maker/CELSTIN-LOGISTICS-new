@@ -11,34 +11,42 @@ import MapView from './MapView';
 import VendorFinancials from './VendorFinancials';
 import UserProfile from './UserProfile';
 import LocationGuard from './LocationGuard';
-import { audioService, SOUNDS } from '../services/audioService';
+import { audioService } from '../services/audioService';
 
 const Dashboard: React.FC = () => {
-  const { currentUser, deliveries, handleUpdateUser } = useContext(AppContext);
+  const { currentUser, deliveries, handleUpdateUser, systemSettings } = useContext(AppContext);
   const [activeTab, setActiveTab] = useState('deliveries');
   const [selectedOrderForNav, setSelectedOrderForNav] = useState<Delivery | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(audioService.isEnabled());
+  const [isMuted, setIsMuted] = useState(audioService.isMuted());
   const prevDeliveriesCount = useRef(deliveries.length);
 
   // Play login sound once when dashboard loads
   useEffect(() => {
-    if (audioUnlocked) {
-      audioService.play(SOUNDS.LOGIN);
+    if (audioUnlocked && !isMuted) {
+      audioService.play(systemSettings.systemSounds.login);
     }
   }, [audioUnlocked]);
 
   // Monitor for new orders
   useEffect(() => {
-    if (deliveries.length > prevDeliveriesCount.current) {
-      audioService.play(SOUNDS.NEW_ORDER);
+    if (deliveries.length > prevDeliveriesCount.current && audioUnlocked && !isMuted) {
+      audioService.play(systemSettings.systemSounds.newOrder);
     }
     prevDeliveriesCount.current = deliveries.length;
-  }, [deliveries.length]);
+  }, [deliveries.length, systemSettings.systemSounds.newOrder, audioUnlocked, isMuted]);
 
   const enableAudio = () => {
     audioService.enable();
     setAudioUnlocked(true);
+    setIsMuted(false);
+  };
+
+  const toggleMute = () => {
+    const newMuteState = !isMuted;
+    audioService.setMuted(newMuteState);
+    setIsMuted(newMuteState);
   };
 
   const userDeliveries = useMemo(() => deliveries.filter(d => {
@@ -130,7 +138,7 @@ const Dashboard: React.FC = () => {
             vehicle: exactAddress
           });
           setIsSyncing(false);
-          audioService.play(SOUNDS.STATUS_CHANGE);
+          if (audioUnlocked && !isMuted) audioService.play(systemSettings.systemSounds.statusChange);
         },
         () => {
           setIsSyncing(false);
@@ -144,7 +152,7 @@ const Dashboard: React.FC = () => {
         locationStatus: 'Disabled',
         vehicle: 'Offline' 
       });
-      audioService.play(SOUNDS.STATUS_CHANGE);
+      if (audioUnlocked && !isMuted) audioService.play(systemSettings.systemSounds.statusChange);
     }
   };
 
@@ -163,13 +171,34 @@ const Dashboard: React.FC = () => {
       case 'deliveries':
         return (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-             {!audioUnlocked && (
+             {!audioUnlocked ? (
                <div className="bg-indigo-600 text-white p-4 rounded-2xl flex items-center justify-between shadow-lg shadow-indigo-600/20">
                   <div className="flex items-center gap-3">
                     <svg className="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
                     <p className="text-xs font-bold uppercase tracking-widest">Enable system audio alerts?</p>
                   </div>
                   <button onClick={enableAudio} className="bg-white text-indigo-600 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-colors">Enable</button>
+               </div>
+             ) : (
+               <div className="flex justify-end">
+                  <button 
+                    onClick={toggleMute}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest transition-all ${
+                      isMuted ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                    }`}
+                  >
+                    {isMuted ? (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
+                        Muted
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+                        Audio On
+                      </>
+                    )}
+                  </button>
                </div>
              )}
              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">

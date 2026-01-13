@@ -10,6 +10,7 @@ import CustomerView from './components/CustomerView';
 import ChatWidget from './components/ChatWidget';
 import { db, auth, syncCollection, onAuthStateChanged, signOut, updateData, setProfileData } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { SOUND_LIBRARY } from './services/audioService';
 
 export interface ChatMessage {
   id: string;
@@ -27,7 +28,6 @@ export interface RecoveryRequest {
   timestamp: Date;
 }
 
-// Fixed missing minimumBasePrice property in DEFAULT_SETTINGS
 const DEFAULT_SETTINGS: SystemSettings = {
   businessName: 'CLESTIN LOGISTICS',
   businessAddress: '123 Logistics Way, Asaba, Delta State',
@@ -43,7 +43,13 @@ const DEFAULT_SETTINGS: SystemSettings = {
   standardCommissionRate: 0.1,
   pricePerKm: 150,
   baseStartingPrice: 3000,
-  minimumBasePrice: 1500
+  minimumBasePrice: 1500,
+  systemSounds: {
+    login: SOUND_LIBRARY.MODERN.CHIME,
+    newOrder: SOUND_LIBRARY.MODERN.ALERT,
+    statusChange: SOUND_LIBRARY.MODERN.POP,
+    paymentConfirmed: SOUND_LIBRARY.MODERN.SUCCESS,
+  }
 };
 
 export const AppContext = React.createContext<{
@@ -131,7 +137,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Improved Auth Observer for Speed and Stability
   useEffect(() => {
     const authUnsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
@@ -141,8 +146,6 @@ const App: React.FC = () => {
             if (profile.active && !profile.isDeleted) {
               setCurrentUser(profile);
             } else {
-              // Only trigger sign out if the profile actually exists but is inactive
-              // If it doesn't exist yet, it's likely a registration in progress
               setCurrentUser(null);
             }
           }
@@ -155,7 +158,6 @@ const App: React.FC = () => {
     return () => authUnsubscribe();
   }, []);
 
-  // Settings & Data Sync
   useEffect(() => {
     const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
       if (docSnap.exists()) {
@@ -169,7 +171,6 @@ const App: React.FC = () => {
     return () => { unsubSettings(); unsubUsers(); unsubDeliveries(); };
   }, []);
 
-  // Theme
   useEffect(() => {
     const root = window.document.documentElement;
     if (systemSettings.theme === 'dark') {

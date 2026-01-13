@@ -89,6 +89,13 @@ export interface Delivery {
   createdAt: any; 
 }
 
+export interface SystemSounds {
+  login: string;
+  newOrder: string;
+  statusChange: string;
+  paymentConfirmed: string;
+}
+
 export interface SystemSettings {
     businessName: string;
     businessAddress: string;
@@ -105,6 +112,7 @@ export interface SystemSettings {
     pricePerKm: number; 
     baseStartingPrice: number;
     minimumBasePrice: number;
+    systemSounds: SystemSounds;
 }
 
 export interface VendorPerformance {

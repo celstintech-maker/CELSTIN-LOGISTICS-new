@@ -5,7 +5,7 @@ import { AppContext } from '../App';
 import { UserCircleIcon, MapIcon } from './icons';
 import { updateData, db } from '../firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { audioService, SOUNDS } from '../services/audioService';
+import { audioService } from '../services/audioService';
 
 interface DeliveriesTableProps {
   title: string;
@@ -37,7 +37,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
         try {
             const updates: any = { status: newStatus };
             await updateData('deliveries', id, updates);
-            audioService.play(SOUNDS.STATUS_CHANGE);
+            audioService.play(systemSettings.systemSounds.statusChange);
             
             if (newStatus === DeliveryStatus.Delivered) {
                 alert("Order reported as DELIVERED. Please ensure the customer has transferred the settlement to the business account shown below.");
@@ -55,7 +55,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
         setVerifyingId(id);
         try {
             await updateData('deliveries', id, { paymentStatus: PaymentStatus.Paid });
-            audioService.play(SOUNDS.PAYMENT_CONFIRMED);
+            audioService.play(systemSettings.systemSounds.paymentConfirmed);
         } catch (error) {
             alert("Verification failed.");
         } finally {
@@ -81,7 +81,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
         setIsDeleting(id);
         try {
             await deleteDoc(doc(db, "deliveries", id));
-            audioService.play(SOUNDS.STATUS_CHANGE);
+            audioService.play(systemSettings.systemSounds.statusChange);
         } catch (error) {
             alert("Delete failed.");
         } finally {
@@ -102,7 +102,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                 },
                 status: DeliveryStatus.Assigned
             });
-            audioService.play(SOUNDS.STATUS_CHANGE);
+            audioService.play(systemSettings.systemSounds.statusChange);
         } catch (error) {
             alert("Assignment failed.");
         }

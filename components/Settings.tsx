@@ -5,6 +5,7 @@ import { NIGERIAN_BANKS } from '../constants';
 import { SystemSettings } from '../types';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { SOUND_LIBRARY } from '../services/audioService';
 
 const SettingsCard: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-all duration-500">
@@ -35,10 +36,15 @@ const Settings: React.FC = () => {
     const handleSave = async () => {
         setSaveStatus('saving');
         try {
-          // Fallback for minimumBasePrice if not already in the object
           const payload = { 
             ...settings, 
-            minimumBasePrice: settings.minimumBasePrice || 1500 
+            minimumBasePrice: settings.minimumBasePrice || 1500,
+            systemSounds: settings.systemSounds || {
+                login: SOUND_LIBRARY.MODERN.CHIME,
+                newOrder: SOUND_LIBRARY.MODERN.ALERT,
+                statusChange: SOUND_LIBRARY.MODERN.POP,
+                paymentConfirmed: SOUND_LIBRARY.MODERN.SUCCESS
+            }
           };
           await setDoc(doc(db, "settings", "global"), payload);
           setSystemSettings(payload);
@@ -57,6 +63,19 @@ const Settings: React.FC = () => {
         setSettings(prev => ({ ...prev, [name]: val }));
     };
 
+    const handleSoundChange = (event: keyof typeof settings.systemSounds, value: string) => {
+        setSettings(prev => ({
+            ...prev,
+            systemSounds: { ...prev.systemSounds, [event]: value }
+        }));
+    };
+
+    const previewSound = (url: string) => {
+        const audio = new Audio(url);
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+    };
+
     const handleThemeToggle = (theme: 'light' | 'dark') => {
         setSettings(prev => ({ ...prev, theme }));
     };
@@ -72,12 +91,19 @@ const Settings: React.FC = () => {
         }
     };
 
+    const soundCategories = [
+        { key: 'login' as const, label: 'System Online (Login)' },
+        { key: 'newOrder' as const, label: 'New Order Alert' },
+        { key: 'statusChange' as const, label: 'Status Update Pop' },
+        { key: 'paymentConfirmed' as const, label: 'Payment Verified Success' },
+    ];
+
     return (
         <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-500">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight font-outfit uppercase">System Core</h2>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Configure branding, pricing, and payments.</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Configure branding, pricing, and audio intelligence.</p>
                 </div>
                 <button
                     onClick={handleSave}
@@ -96,6 +122,45 @@ const Settings: React.FC = () => {
             
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 <div className="space-y-8">
+                    <SettingsCard title="Audio Intelligence">
+                        <div className="space-y-6">
+                            {soundCategories.map(cat => (
+                                <FormField key={cat.key} label={cat.label}>
+                                    <div className="flex gap-2">
+                                        <select 
+                                            value={settings.systemSounds[cat.key]} 
+                                            onChange={(e) => handleSoundChange(cat.key, e.target.value)}
+                                            className="form-input flex-grow"
+                                        >
+                                            <optgroup label="Modern Suite">
+                                                {Object.entries(SOUND_LIBRARY.MODERN).map(([name, url]) => (
+                                                    <option key={url} value={url}>Modern - {name}</option>
+                                                ))}
+                                            </optgroup>
+                                            <optgroup label="Classic Suite">
+                                                {Object.entries(SOUND_LIBRARY.CLASSIC).map(([name, url]) => (
+                                                    <option key={url} value={url}>Classic - {name}</option>
+                                                ))}
+                                            </optgroup>
+                                            <optgroup label="Retro Suite">
+                                                {Object.entries(SOUND_LIBRARY.RETRO).map(([name, url]) => (
+                                                    <option key={url} value={url}>Retro - {name}</option>
+                                                ))}
+                                            </optgroup>
+                                        </select>
+                                        <button 
+                                            onClick={() => previewSound(settings.systemSounds[cat.key])}
+                                            className="p-3 bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 rounded-xl hover:bg-indigo-200 transition-colors"
+                                            title="Preview Sound"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+                                        </button>
+                                    </div>
+                                </FormField>
+                            ))}
+                        </div>
+                    </SettingsCard>
+
                     <SettingsCard title="Logistics Pricing">
                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                             <FormField label="Standard Price per KM (₦)">
@@ -107,7 +172,6 @@ const Settings: React.FC = () => {
                                     value={settings.pricePerKm} 
                                     onChange={handleInputChange} 
                                     className="form-input pl-10" 
-                                    placeholder="150"
                                 />
                                 </div>
                             </FormField>
@@ -120,60 +184,10 @@ const Settings: React.FC = () => {
                                     value={settings.minimumBasePrice || 1500} 
                                     onChange={handleInputChange} 
                                     className="form-input pl-10" 
-                                    placeholder="1500"
-                                />
-                                </div>
-                            </FormField>
-                            <FormField label="Hero Display Start Price (₦)">
-                                <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">₦</span>
-                                <input 
-                                    type="number" 
-                                    name="baseStartingPrice" 
-                                    value={settings.baseStartingPrice} 
-                                    onChange={handleInputChange} 
-                                    className="form-input pl-10" 
-                                    placeholder="3000"
                                 />
                                 </div>
                             </FormField>
                          </div>
-                    </SettingsCard>
-
-                    <SettingsCard title="Identity & Branding">
-                        <FormField label="Official Brand Name">
-                            <input type="text" name="businessName" value={settings.businessName} onChange={handleInputChange} className="form-input" />
-                        </FormField>
-                        <FormField label="Landing Page Hero Headline">
-                            <input type="text" name="heroTitle" value={settings.heroTitle} onChange={handleInputChange} className="form-input" placeholder="e.g. Rapid Logistics in Asaba" />
-                        </FormField>
-                        <FormField label="Landing Page Subtext">
-                            <textarea name="heroSubtext" value={settings.heroSubtext} onChange={handleInputChange} rows={2} className="form-input" placeholder="Promotional subtext copy..." />
-                        </FormField>
-                        <FormField label="Headquarters Address">
-                            <textarea name="businessAddress" value={settings.businessAddress} onChange={handleInputChange} rows={2} className="form-input" />
-                        </FormField>
-                        <FormField label="Corporate Logo">
-                            <div className="flex flex-col gap-4">
-                                {settings.logoUrl ? (
-                                    <div className="relative group w-32 h-32">
-                                        <img src={settings.logoUrl} className="w-full h-full rounded-2xl object-cover border-2 border-slate-100 dark:border-slate-800 bg-white shadow-sm" alt="Logo preview" />
-                                        <button onClick={() => setSettings(s => ({...s, logoUrl: ''}))} className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 shadow-lg">
-                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"/></svg>
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <button 
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="w-full h-32 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-indigo-400 transition-all text-slate-400"
-                                    >
-                                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                                        <span className="text-[10px] font-bold uppercase tracking-widest">Upload Master Logo</span>
-                                    </button>
-                                )}
-                                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleLogoUpload} />
-                            </div>
-                        </FormField>
                     </SettingsCard>
                 </div>
                 
@@ -193,23 +207,13 @@ const Settings: React.FC = () => {
                             </FormField>
                         </div>
                     </SettingsCard>
-                    <SettingsCard title="Interface & Theme">
-                         <FormField label="System Mode">
-                            <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl gap-1 border border-slate-200 dark:border-slate-800">
-                                <button 
-                                    onClick={() => handleThemeToggle('light')}
-                                    className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 ${settings.theme === 'light' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    Clean Slate
-                                </button>
-                                <button 
-                                    onClick={() => handleThemeToggle('dark')}
-                                    className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 ${settings.theme === 'dark' ? 'bg-slate-900 text-white shadow-sm border border-slate-800' : 'text-slate-500 hover:text-slate-400'}`}
-                                >
-                                    Midnight Onyx
-                                </button>
-                            </div>
-                         </FormField>
+                    <SettingsCard title="Identity & Branding">
+                        <FormField label="Official Brand Name">
+                            <input type="text" name="businessName" value={settings.businessName} onChange={handleInputChange} className="form-input" />
+                        </FormField>
+                        <FormField label="Landing Page Hero Headline">
+                            <input type="text" name="heroTitle" value={settings.heroTitle} onChange={handleInputChange} className="form-input" />
+                        </FormField>
                     </SettingsCard>
                 </div>
             </div>
