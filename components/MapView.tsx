@@ -4,6 +4,7 @@ import { AppContext } from '../App';
 import { Role, User, Delivery } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { GoogleGenAI } from "@google/genai";
 
 declare const L: any;
 
@@ -24,7 +25,59 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
   const [isLocating, setIsLocating] = useState(false);
   const [mapMode, setMapMode] = useState<'logistics' | 'satellite'>('logistics');
 
+  // AI Navigation State
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [aiLinks, setAiLinks] = useState<{ title: string; uri: string }[]>([]);
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+
   const isAdmin = currentUser?.role === Role.Admin || currentUser?.role === Role.SuperAdmin;
+  const isRider = currentUser?.role === Role.Rider;
+
+  const handleAiNavigation = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsAiThinking(true);
+    setAiResponse(null);
+    
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const currentLoc = currentUser?.location || { lat: 6.1957, lng: 6.7296 };
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `I am at ${currentLoc.lat}, ${currentLoc.lng} in Asaba. ${aiPrompt}. 
+                  Provide a concise, professional routing advice for a delivery rider. 
+                  Mention specific Asaba landmarks like Nnebisi Road, Sumit Road, or DLA if applicable.`,
+        config: {
+          systemInstruction: "You are the CLESTIN AI Dispatcher. You help riders navigate Asaba efficiently. Focus on short, clear directions and use Google Maps grounding for accuracy.",
+          tools: [{ googleMaps: {} }],
+          toolConfig: {
+            retrievalConfig: {
+              latLng: {
+                latitude: currentLoc.lat,
+                longitude: currentLoc.lng
+              }
+            }
+          }
+        },
+      });
+
+      setAiResponse(response.text || "Analyzed your route.");
+      const links = response.candidates?.[0]?.groundingMetadata?.groundingChunks
+        ?.filter((chunk: any) => chunk.maps)
+        ?.map((chunk: any) => ({
+          title: chunk.maps.title,
+          uri: chunk.maps.uri
+        })) || [];
+      setAiLinks(links);
+      setAiPrompt('');
+    } catch (error) {
+      console.error("AI Navigator Error:", error);
+      setAiResponse("Signal interference. Please check your network and try again.");
+    } finally {
+      setIsAiThinking(false);
+    }
+  };
 
   const calculateHeading = (start: {lat: number, lng: number}, end: {lat: number, lng: number}) => {
     const dy = end.lat - start.lat;
@@ -113,8 +166,6 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       where('active', '==', true)
     );
 
-    // includeMetadataChanges: true ensures that even if backend is slow, 
-    // we use cached data for markers immediately.
     const unsubscribe = onSnapshot(ridersQuery, { includeMetadataChanges: true }, (snapshot) => {
       const map = mapRef.current;
       if (!map) return;
@@ -127,7 +178,6 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         const rider = { id: doc.id, ...data } as User;
         ridersList.push(rider);
         
-        // Ensure coordinates are valid numbers
         const lat = typeof rider.location?.lat === 'number' ? rider.location.lat : parseFloat(rider.location?.lat as any);
         const lng = typeof rider.location?.lng === 'number' ? rider.location.lng : parseFloat(rider.location?.lng as any);
         
@@ -248,6 +298,60 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       <div className="flex-grow bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden relative h-[500px] md:h-[700px]">
         <div ref={mapContainerRef} className="h-full w-full z-10" />
         
+        {/* RIDER AI NAVIGATOR PANEL */}
+        {isRider && (
+          <div className="absolute bottom-6 left-6 right-6 md:right-auto md:w-96 z-[500] animate-in slide-in-from-bottom-4 duration-500">
+             <div className="bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-4 md:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">AI Routing Assistant</span>
+                  </div>
+                  {aiResponse && (
+                    <button onClick={() => setAiResponse(null)} className="text-[9px] font-bold text-rose-500 uppercase hover:underline">Clear Nav</button>
+                  )}
+                </div>
+
+                {aiResponse ? (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-left-2">
+                    <div className="bg-indigo-50 dark:bg-indigo-500/10 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/40">
+                      <p className="text-xs font-medium text-slate-700 dark:text-slate-200 leading-relaxed italic">
+                        "{aiResponse}"
+                      </p>
+                    </div>
+                    {aiLinks.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {aiLinks.map((link, i) => (
+                          <a key={i} href={link.uri} target="_blank" rel="noopener" className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:scale-105 transition-all">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                            {link.title}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      placeholder="e.g. Fastest way to Okpanam Road?"
+                      className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-4 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900 dark:text-white"
+                    />
+                    <button 
+                      onClick={handleAiNavigation}
+                      disabled={isAiThinking || !aiPrompt.trim()}
+                      className="absolute right-2 top-2 bottom-2 px-5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 active:scale-95 disabled:opacity-20 transition-all flex items-center gap-2"
+                    >
+                      {isAiThinking ? <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : 'Plan'}
+                    </button>
+                  </div>
+                )}
+             </div>
+          </div>
+        )}
+
         {selectedRider && (
           <div className="absolute top-6 left-6 right-6 md:right-auto md:w-80 z-[500] animate-in slide-in-from-left-4 duration-500">
             <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl border border-white/20 dark:border-slate-800 shadow-2xl overflow-hidden">
