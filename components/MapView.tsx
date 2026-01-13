@@ -33,6 +33,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
 
   const isAdmin = currentUser?.role === Role.Admin || currentUser?.role === Role.SuperAdmin;
   const isRider = currentUser?.role === Role.Rider;
+  const canUseAi = isAdmin || isRider;
 
   const handleAiNavigation = async () => {
     if (!aiPrompt.trim()) return;
@@ -45,11 +46,11 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `I am at ${currentLoc.lat}, ${currentLoc.lng} in Asaba. ${aiPrompt}. 
-                  Provide a concise, professional routing advice for a delivery rider. 
-                  Mention specific Asaba landmarks like Nnebisi Road, Sumit Road, or DLA if applicable.`,
+        contents: `Current GPS: ${currentLoc.lat}, ${currentLoc.lng} (Asaba). Task: ${aiPrompt}. 
+                  Provide concise routing advice for a delivery personnel. 
+                  Highlight shortcuts via Nnebisi, Okpanam Road, or DLA.`,
         config: {
-          systemInstruction: "You are the CLESTIN AI Dispatcher. You help riders navigate Asaba efficiently. Focus on short, clear directions and use Google Maps grounding for accuracy.",
+          systemInstruction: "You are the CLESTIN AI Dispatcher. You specialize in Asaba logistics. Use Google Maps grounding to provide real-world location links and short, actionable driving/riding directions.",
           tools: [{ googleMaps: {} }],
           toolConfig: {
             retrievalConfig: {
@@ -73,7 +74,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       setAiPrompt('');
     } catch (error) {
       console.error("AI Navigator Error:", error);
-      setAiResponse("Signal interference. Please check your network and try again.");
+      setAiResponse("AI Node Offline. Please check your satellite link.");
     } finally {
       setIsAiThinking(false);
     }
@@ -298,32 +299,32 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       <div className="flex-grow bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden relative h-[500px] md:h-[700px]">
         <div ref={mapContainerRef} className="h-full w-full z-10" />
         
-        {/* RIDER AI NAVIGATOR PANEL */}
-        {isRider && (
+        {/* LOGISTICS AI NAVIGATOR PANEL */}
+        {canUseAi && (
           <div className="absolute bottom-6 left-6 right-6 md:right-auto md:w-96 z-[500] animate-in slide-in-from-bottom-4 duration-500">
              <div className="bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-4 md:p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">AI Routing Assistant</span>
+                    <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">AI Dispatch Assistant</span>
                   </div>
                   {aiResponse && (
-                    <button onClick={() => setAiResponse(null)} className="text-[9px] font-bold text-rose-500 uppercase hover:underline">Clear Nav</button>
+                    <button onClick={() => setAiResponse(null)} className="text-[10px] font-black text-indigo-500 uppercase hover:text-indigo-600 transition-colors">Reset</button>
                   )}
                 </div>
 
                 {aiResponse ? (
                   <div className="space-y-4 animate-in fade-in slide-in-from-left-2">
                     <div className="bg-indigo-50 dark:bg-indigo-500/10 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/40">
-                      <p className="text-xs font-medium text-slate-700 dark:text-slate-200 leading-relaxed italic">
-                        "{aiResponse}"
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 leading-relaxed italic">
+                        {aiResponse}
                       </p>
                     </div>
                     {aiLinks.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {aiLinks.map((link, i) => (
-                          <a key={i} href={link.uri} target="_blank" rel="noopener" className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:scale-105 transition-all">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                          <a key={i} href={link.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl text-[10px] font-black text-indigo-600 dark:text-indigo-400 hover:scale-105 transition-all shadow-sm">
+                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                             {link.title}
                           </a>
                         ))}
@@ -331,13 +332,17 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
                     )}
                   </div>
                 ) : (
-                  <div className="relative">
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 16.382V5.618a1 1 0 00-1.447-.894L15 7m0 10V7m0 10L9 7"/></svg>
+                    </div>
                     <input 
                       type="text" 
                       value={aiPrompt}
                       onChange={(e) => setAiPrompt(e.target.value)}
-                      placeholder="e.g. Fastest way to Okpanam Road?"
-                      className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-4 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900 dark:text-white"
+                      onKeyDown={(e) => e.key === 'Enter' && handleAiNavigation()}
+                      placeholder="e.g. Fastest way to Nnebisi from here?"
+                      className="w-full bg-slate-100 dark:bg-slate-900 border-2 border-transparent focus:border-indigo-500 rounded-2xl pl-11 pr-24 py-4 text-xs font-bold outline-none transition-all text-slate-900 dark:text-white"
                     />
                     <button 
                       onClick={handleAiNavigation}
@@ -410,13 +415,4 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         .beacon-img { width: 100%; height: 100%; object-fit: cover; transform: rotate(45deg); }
         .beacon-initial { transform: rotate(45deg); font-weight: 900; font-size: 14px; }
         .beacon-pointer { position: absolute; bottom: 0px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid; z-index: 5; }
-        .beacon-vector { position: absolute; top: 50%; left: 50%; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 20px solid; transform-origin: center; opacity: 0.4; z-index: 2; margin-top: -32px; }
-        .is-off .beacon-pulse { display: none; }
-        .is-off .beacon-core { filter: grayscale(1); opacity: 0.7; }
-        @keyframes beacon-ping { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(3.5); opacity: 0; } }
-      `}</style>
-    </div>
-  );
-};
-
-export default MapView;
+        .beacon-vector { position: absolute; top: 50%; left: 50%; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 20px solid; transform-origin: center; opacity: 0
