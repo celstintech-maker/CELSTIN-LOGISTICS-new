@@ -44,19 +44,6 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
     }
   };
 
-  const geocodeAddress = async (address: string) => {
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ", Asaba, Nigeria")}&limit=1`);
-      const data = await response.json();
-      if (data && data.length > 0) {
-        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-      }
-      return null;
-    } catch (e) {
-      return null;
-    }
-  };
-
   const toggleMapMode = () => {
     const newMode = mapMode === 'logistics' ? 'satellite' : 'logistics';
     setMapMode(newMode);
@@ -71,83 +58,6 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       }
     }
   };
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-
-    const buildRoute = async () => {
-      if (!targetOrder) {
-        if (routingControlRef.current) {
-          mapRef.current.removeControl(routingControlRef.current);
-          routingControlRef.current = null;
-          setRouteStats(null);
-        }
-        return;
-      }
-
-      const pickupCoords = await geocodeAddress(targetOrder.pickupAddress);
-      const dropoffCoords = await geocodeAddress(targetOrder.dropoffAddress);
-      
-      if (!pickupCoords || !dropoffCoords) return;
-
-      const waypoints = [
-        L.latLng(pickupCoords.lat, pickupCoords.lng),
-        L.latLng(dropoffCoords.lat, dropoffCoords.lng)
-      ];
-
-      if (targetOrder.rider?.id) {
-        const assignedRider = activeRiders.find(r => r.id === targetOrder.rider?.id);
-        if (assignedRider?.location) {
-          waypoints.unshift(L.latLng(assignedRider.location.lat, assignedRider.location.lng));
-        }
-      }
-
-      if (routingControlRef.current) {
-        mapRef.current.removeControl(routingControlRef.current);
-      }
-
-      routingControlRef.current = L.Routing.control({
-        waypoints,
-        routeWhileDragging: false,
-        addWaypoints: false,
-        showAlternatives: false,
-        createMarker: (i: number, wp: any) => {
-          const isFirst = i === 0;
-          const isLast = i === waypoints.length - 1;
-          const iconHtml = isFirst 
-            ? `<div class="bg-indigo-600 text-white p-2 rounded-full shadow-lg border-2 border-white animate-bounce"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></div>`
-            : isLast 
-              ? `<div class="bg-rose-600 text-white p-2 rounded-full shadow-lg border-2 border-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg></div>`
-              : `<div class="bg-amber-500 text-white p-2 rounded-full shadow-lg border-2 border-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg></div>`;
-          
-          return L.marker(wp.latLng, {
-            icon: L.divIcon({
-              className: '',
-              html: iconHtml,
-              iconSize: [32, 32],
-              iconAnchor: [16, 16]
-            })
-          });
-        },
-        lineOptions: {
-          styles: [{ color: '#4f46e5', weight: 6, opacity: 0.8 }]
-        }
-      }).addTo(mapRef.current);
-
-      routingControlRef.current.on('routesfound', (e: any) => {
-        const route = e.routes[0];
-        setRouteStats({
-          distance: (route.summary.totalDistance / 1000).toFixed(1) + ' km',
-          time: Math.round(route.summary.totalTime / 60) + ' mins'
-        });
-        
-        const bounds = L.latLngBounds(waypoints);
-        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
-      });
-    };
-
-    buildRoute();
-  }, [targetOrder, activeRiders]);
 
   const locateMe = () => {
     setIsLocating(true);
@@ -225,7 +135,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         const position: [number, number] = [rider.location.lat, rider.location.lng];
         
         const prev = prevCoordsRef.current.get(rider.id);
-        const isMoving = prev && (Math.abs(prev.lat - rider.location.lat) > 0.00001 || Math.abs(prev.lng - rider.location.lng) > 0.00001);
+        const isMoving = prev && (Math.abs(prev.lat - rider.location.lat) > 0.0001 || Math.abs(prev.lng - rider.location.lng) > 0.0001);
         const heading = isMoving ? calculateHeading(prev!, rider.location) : (prev?.heading || 0);
         
         prevCoordsRef.current.set(rider.id, {lat: rider.location.lat, lng: rider.location.lng, heading});
@@ -233,36 +143,25 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         const statusColor = isOff ? '#f43f5e' : (rider.riderStatus === 'On Delivery' ? '#f59e0b' : '#10b981');
         
         const riderIcon = L.divIcon({
-          html: `<div class="radar-marker-pro ${isOff ? 'signal-off' : ''} ${isMoving ? 'is-moving' : 'is-static'}" style="z-index: ${isMoving ? 1000 : 500}">
-                  <div class="radar-beam-container">
-                    <div class="radar-beam" style="background: conic-gradient(from 0deg, ${statusColor}00 0%, ${statusColor}44 50%, ${statusColor}88 100%);"></div>
-                  </div>
+          html: `<div class="radar-marker-pro ${isOff ? 'signal-off' : ''} ${isMoving ? 'is-moving' : 'is-static'}">
                   <div class="sonar-ring" style="border-color: ${statusColor}"></div>
-                  <div class="marker-container" style="transform: rotate(${heading + 45}deg)">
-                    <div class="marker-shadow"></div>
-                    <div class="marker-pointer" style="border-top-color: ${statusColor}"></div>
-                    <div class="marker-body" style="background: ${statusColor}">
-                      <div class="marker-content-wrapper" style="transform: rotate(${- (heading + 45)}deg)">
+                  <div class="marker-container">
+                    <div class="marker-body" style="border-color: ${statusColor}">
                         ${rider.profilePicture ? `<img src="${rider.profilePicture}" class="marker-img" />` : `<div class="marker-initial">${rider.name.charAt(0)}</div>`}
-                      </div>
                     </div>
+                    <div class="marker-pointer" style="border-top-color: ${statusColor}"></div>
                   </div>
                   ${isMoving ? `<div class="heading-arrow" style="transform: translate(-50%, -50%) rotate(${heading}deg); border-bottom-color: ${statusColor}"></div>` : ''}
                  </div>`,
           className: 'leaflet-animated-icon',
-          iconSize: [80, 80],
-          iconAnchor: [40, 40],
+          iconSize: [60, 60],
+          iconAnchor: [30, 30],
         });
 
         if (markersMapRef.current.has(rider.id)) {
           const marker = markersMapRef.current.get(rider.id);
           marker.setLatLng(position);
           marker.setIcon(riderIcon);
-          marker.off('click').on('click', (e: any) => {
-            L.DomEvent.stopPropagation(e);
-            setSelectedRider(rider);
-            centerMap(rider.location!, 17);
-          });
         } else {
           const marker = L.marker(position, { icon: riderIcon }).addTo(map);
           marker.on('click', (e: any) => {
@@ -278,7 +177,6 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         if (!activeIds.has(id)) {
           marker.remove();
           markersMapRef.current.delete(id);
-          prevCoordsRef.current.delete(id);
         }
       });
       
@@ -291,14 +189,13 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
   return (
     <div className="h-full w-full flex flex-col md:flex-row gap-4 animate-in fade-in duration-700">
       
-      {/* Admin Fleet Sidebar with Real-time Address Resolution */}
       {isAdmin && (
-        <div className="w-full md:w-80 h-[300px] md:h-[700px] flex flex-col gap-3 overflow-y-auto no-scrollbar pb-4">
+        <div className="w-full md:w-80 h-[250px] md:h-[700px] flex flex-col gap-3 overflow-y-auto no-scrollbar pb-4">
           <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm sticky top-0 z-20">
-             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Fleet Command Center</h3>
+             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Live Fleet Status</h3>
              <div className="flex items-center justify-between">
-                <span className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter font-outfit">Active Nodes</span>
-                <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse">{activeRiders.length} LIVE</span>
+                <span className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Active Nodes</span>
+                <span className="bg-indigo-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black animate-pulse">{activeRiders.length} LIVE</span>
              </div>
           </div>
           
@@ -312,40 +209,29 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
                     setSelectedRider(rider);
                   }
                 }}
-                className={`flex items-center gap-4 p-3 rounded-2xl border transition-all text-left group relative overflow-hidden ${
+                className={`flex items-center gap-4 p-3 rounded-2xl border transition-all text-left ${
                   selectedRider?.id === rider.id 
-                  ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-600/20' 
-                  : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-800'
+                  ? 'bg-indigo-600 border-indigo-500 shadow-lg' 
+                  : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-indigo-400'
                 }`}
               >
                 <div className="relative shrink-0">
-                  <div className={`w-14 h-14 rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 border-2 transition-colors ${selectedRider?.id === rider.id ? 'border-white/40' : 'border-slate-100 dark:border-slate-800'}`}>
+                  <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 border-2 border-white/20">
                     {rider.profilePicture ? (
-                      <img src={rider.profilePicture} className="w-full h-full object-cover" alt={rider.name} />
+                      <img src={rider.profilePicture} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center font-black text-indigo-500 uppercase text-lg">{rider.name.charAt(0)}</div>
                     )}
                   </div>
-                  <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-slate-900 ${
+                  <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-900 ${
                     rider.locationStatus === 'Disabled' ? 'bg-rose-500' : (rider.riderStatus === 'Available' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500')
                   }`}></div>
                 </div>
                 <div className="overflow-hidden flex-grow">
-                  <div className="flex items-center justify-between">
-                    <p className={`font-black text-[11px] uppercase truncate ${selectedRider?.id === rider.id ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{rider.name}</p>
-                    <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${selectedRider?.id === rider.id ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
-                      {rider.riderStatus?.split(' ')[0]}
-                    </span>
-                  </div>
-                  <p className={`text-[9px] font-bold italic leading-tight mt-1 group-hover:text-indigo-500 transition-colors ${selectedRider?.id === rider.id ? 'text-indigo-100' : 'text-indigo-500 dark:text-indigo-400'}`}>
+                  <p className={`font-black text-[11px] uppercase truncate ${selectedRider?.id === rider.id ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{rider.name}</p>
+                  <p className={`text-[9px] font-bold italic leading-tight mt-1 ${selectedRider?.id === rider.id ? 'text-indigo-100' : 'text-indigo-500'}`}>
                     📍 {rider.vehicle || 'Resolving Street Position...'}
                   </p>
-                  <div className="flex items-center gap-1 mt-1.5">
-                    <div className="w-1 h-1 rounded-full bg-slate-300"></div>
-                    <span className={`text-[7px] font-black uppercase tracking-tighter ${selectedRider?.id === rider.id ? 'text-indigo-200' : 'text-slate-400'}`}>
-                      Signal Verified • Asaba Node
-                    </span>
-                  </div>
                 </div>
               </button>
             ))}
@@ -353,60 +239,41 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         </div>
       )}
 
-      {/* Main Map Terminal */}
       <div className="flex-grow bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden relative h-[500px] md:h-[700px]">
         <div ref={mapContainerRef} className="h-full w-full z-10" />
         
-        {routeStats && (
-          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[400] animate-in slide-in-from-top-4 duration-500 w-[90%] md:w-auto">
-            <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-indigo-500/30 rounded-2xl px-6 py-3 shadow-2xl flex items-center justify-center gap-6">
-              <div className="flex flex-col items-center">
-                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Total Span</span>
-                <span className="text-lg font-black text-indigo-600 dark:text-indigo-400 tracking-tighter">{routeStats.distance}</span>
-              </div>
-              <div className="w-px h-8 bg-slate-200 dark:bg-slate-800"></div>
-              <div className="flex flex-col items-center">
-                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Estimated Arrival</span>
-                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 tracking-tighter">{routeStats.time}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
         {selectedRider && (
           <div className="absolute top-6 left-6 right-6 md:right-auto md:w-80 z-[500] animate-in slide-in-from-left-4 duration-500">
             <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl border border-white/20 dark:border-slate-800 shadow-2xl overflow-hidden">
-               <div className="relative h-24 bg-indigo-600 flex items-center justify-center overflow-hidden">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/20 to-transparent"></div>
-                  <button onClick={() => setSelectedRider(null)} className="absolute top-3 right-3 p-1.5 bg-black/20 hover:bg-black/40 text-white rounded-full transition-all z-10">
+               <div className="relative h-24 bg-indigo-600 flex items-center justify-center">
+                  <button onClick={() => setSelectedRider(null)} className="absolute top-3 right-3 p-1.5 bg-black/20 text-white rounded-full transition-all">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"/></svg>
                   </button>
-                  <div className="absolute -bottom-8 left-6 z-10">
-                     <div className="w-20 h-20 rounded-2xl border-4 border-white dark:border-slate-900 overflow-hidden shadow-2xl bg-slate-200">
+                  <div className="absolute -bottom-8 left-6">
+                     <div className="w-16 h-16 rounded-2xl border-4 border-white dark:border-slate-900 overflow-hidden shadow-xl bg-slate-200">
                         {selectedRider.profilePicture ? (
-                          <img src={selectedRider.profilePicture} className="w-full h-full object-cover" alt={selectedRider.name} />
+                          <img src={selectedRider.profilePicture} className="w-full h-full object-cover" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-indigo-500 text-white font-black text-2xl">{selectedRider.name.charAt(0)}</div>
+                          <div className="w-full h-full flex items-center justify-center bg-indigo-500 text-white font-black text-xl">{selectedRider.name.charAt(0)}</div>
                         )}
                      </div>
                   </div>
                </div>
-               <div className="pt-12 pb-6 px-6">
-                  <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight font-outfit">{selectedRider.name}</h4>
+               <div className="pt-10 pb-6 px-6">
+                  <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight font-outfit">{selectedRider.name}</h4>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`w-2.5 h-2.5 rounded-full ${selectedRider.locationStatus === 'Disabled' ? 'bg-rose-500' : (selectedRider.riderStatus === 'Available' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500')}`}></span>
-                    <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{selectedRider.riderStatus}</span>
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{selectedRider.riderStatus}</span>
                   </div>
-                  <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-inner">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Real-time Street Resolved</p>
-                    <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 italic leading-snug">📍 {selectedRider.vehicle || 'Live Address Unknown'}</p>
+                  <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Telemetry Location</p>
+                    <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200 italic leading-snug">📍 {selectedRider.vehicle || 'Unknown Position'}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3 mt-6">
-                    <a href={`tel:${selectedRider.phone}`} className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                    <a href={`tel:${selectedRider.phone}`} className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 active:scale-95">
                       Direct Call
                     </a>
-                    <button onClick={() => centerMap(selectedRider.location!, 18)} className="flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95">
+                    <button onClick={() => centerMap(selectedRider.location!, 18)} className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-slate-200">
                       Target Focus
                     </button>
                   </div>
@@ -415,36 +282,29 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
           </div>
         )}
 
-        {/* Floating Controls */}
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 md:bottom-auto md:top-6 md:right-6 md:left-auto md:translate-x-0 z-[400] flex md:flex-col gap-3">
-          <button onClick={locateMe} disabled={isLocating} className="p-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 hover:scale-110 active:scale-95 transition-all text-indigo-600">
+        <div className="absolute top-6 right-6 z-[400] flex flex-col gap-3">
+          <button onClick={locateMe} disabled={isLocating} className="p-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 text-indigo-600">
             {isLocating ? <svg className="animate-spin w-6 h-6" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>}
           </button>
-          <button onClick={toggleMapMode} className={`p-4 backdrop-blur-md rounded-2xl shadow-2xl border transition-all flex flex-col items-center gap-1 ${mapMode === 'satellite' ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-white/95 dark:bg-slate-900/95 text-slate-600 dark:text-slate-300 border-white/20'}`}>
+          <button onClick={toggleMapMode} className={`p-4 backdrop-blur-md rounded-2xl shadow-xl border transition-all flex flex-col items-center gap-1 ${mapMode === 'satellite' ? 'bg-indigo-600 text-white' : 'bg-white/95 dark:bg-slate-900/95 text-slate-600 border-white/20'}`}>
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <span className="hidden md:block text-[8px] font-black uppercase tracking-widest">{mapMode}</span>
+            <span className="text-[8px] font-black uppercase tracking-widest">{mapMode}</span>
           </button>
         </div>
       </div>
 
       <style>{`
-        .radar-marker-pro { position: relative; display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; pointer-events: auto !important; }
-        .radar-beam-container { position: absolute; width: 100%; height: 100%; animation: radar-rotate 4s linear infinite; z-index: 1; pointer-events: none; }
-        .radar-beam { position: absolute; width: 50%; height: 50%; top: 0; left: 50%; transform-origin: bottom left; border-radius: 100% 0 0 0; }
-        .sonar-ring { position: absolute; width: 20px; height: 20px; border: 3px solid; border-radius: 50%; opacity: 0.6; animation: sonar-ping 2.5s ease-out infinite; z-index: 0; pointer-events: none; }
-        .marker-container { position: relative; z-index: 10; width: 48px; height: 48px; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        .marker-body { width: 48px; height: 48px; border-radius: 50% 50% 50% 0; border: 3px solid white; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 24px rgba(0,0,0,0.4); transition: transform 0.2s; }
-        .marker-container:hover .marker-body { transform: scale(1.1); }
-        .marker-content-wrapper { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #4f46e5; }
-        .marker-img { width: 100%; height: 100%; object-fit: cover; }
-        .marker-initial { color: white; font-weight: 900; font-size: 18px; }
-        .marker-pointer { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 12px solid; }
-        .marker-shadow { position: absolute; width: 24px; height: 8px; background: rgba(0,0,0,0.3); border-radius: 50%; bottom: -14px; left: 50%; transform: translateX(-50%); filter: blur(4px); }
-        .heading-arrow { position: absolute; top: 50%; left: 50%; width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-bottom: 30px solid; transform-origin: center; opacity: 0.6; z-index: 5; margin-top: -45px; }
-        .signal-off .radar-beam-container, .signal-off .sonar-ring { display: none; }
-        .signal-off .marker-body { filter: grayscale(1) contrast(0.8); border-color: #cbd5e1; }
-        @keyframes radar-rotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        @keyframes sonar-ping { 0% { width: 20px; height: 20px; opacity: 1; } 100% { width: 120px; height: 120px; opacity: 0; } }
+        .radar-marker-pro { position: relative; display: flex; align-items: center; justify-content: center; width: 60px; height: 60px; pointer-events: auto !important; }
+        .sonar-ring { position: absolute; width: 20px; height: 20px; border: 3px solid; border-radius: 50%; opacity: 0.6; animation: sonar-ping 2.5s ease-out infinite; pointer-events: none; }
+        .marker-container { position: relative; z-index: 10; width: 44px; height: 44px; }
+        .marker-body { width: 44px; height: 44px; border-radius: 50% 50% 50% 0; border: 3px solid; overflow: hidden; display: flex; align-items: center; justify-content: center; transform: rotate(-45deg); background: white; shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .marker-img { width: 100%; height: 100%; object-fit: cover; transform: rotate(45deg); }
+        .marker-initial { transform: rotate(45deg); font-weight: 900; color: #4f46e5; }
+        .marker-pointer { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 10px solid; }
+        .heading-arrow { position: absolute; top: 50%; left: 50%; width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 24px solid; transform-origin: center; opacity: 0.6; z-index: 5; margin-top: -38px; }
+        .signal-off .sonar-ring { display: none; }
+        .signal-off .marker-body { filter: grayscale(1); opacity: 0.7; }
+        @keyframes sonar-ping { 0% { width: 20px; height: 20px; opacity: 1; } 100% { width: 100px; height: 100px; opacity: 0; } }
         .leaflet-animated-icon { transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), top 0.8s cubic-bezier(0.4, 0, 0.2, 1), left 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
       `}</style>
     </div>
