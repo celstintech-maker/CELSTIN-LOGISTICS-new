@@ -5,6 +5,7 @@ import { AppContext } from '../App';
 import { UserCircleIcon, MapIcon } from './icons';
 import { updateData, db } from '../firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
+import { audioService, SOUNDS } from '../services/audioService';
 
 interface DeliveriesTableProps {
   title: string;
@@ -36,6 +37,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
         try {
             const updates: any = { status: newStatus };
             await updateData('deliveries', id, updates);
+            audioService.play(SOUNDS.STATUS_CHANGE);
             
             if (newStatus === DeliveryStatus.Delivered) {
                 alert("Order reported as DELIVERED. Please ensure the customer has transferred the settlement to the business account shown below.");
@@ -53,6 +55,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
         setVerifyingId(id);
         try {
             await updateData('deliveries', id, { paymentStatus: PaymentStatus.Paid });
+            audioService.play(SOUNDS.PAYMENT_CONFIRMED);
         } catch (error) {
             alert("Verification failed.");
         } finally {
@@ -78,6 +81,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
         setIsDeleting(id);
         try {
             await deleteDoc(doc(db, "deliveries", id));
+            audioService.play(SOUNDS.STATUS_CHANGE);
         } catch (error) {
             alert("Delete failed.");
         } finally {
@@ -98,6 +102,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                 },
                 status: DeliveryStatus.Assigned
             });
+            audioService.play(SOUNDS.STATUS_CHANGE);
         } catch (error) {
             alert("Assignment failed.");
         }
@@ -153,9 +158,13 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                 ) : deliveries.map(d => (
                     <div key={d.id} className="p-5 flex flex-col gap-4">
                         <div className="flex justify-between items-start">
-                            <div>
+                            <div className="flex items-center gap-2">
                                 <p className="text-[10px] font-mono text-slate-400">#{d.id.slice(-5)}</p>
-                                <p className="font-bold text-slate-900 dark:text-white text-sm">{d.customer.name}</p>
+                                {isSuperAdmin && (
+                                  <button onClick={() => handleDeleteOrder(d.id)} className="p-1 text-rose-500">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                  </button>
+                                )}
                             </div>
                             <div className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase border ${statusStyles[d.status]}`}>
                                 {d.status}
@@ -163,7 +172,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                         </div>
 
                         <div className="flex flex-col gap-1">
-                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Route</p>
+                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Client: {d.customer.name}</p>
                             <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">{d.dropoffAddress}</p>
                         </div>
                         
@@ -203,6 +212,12 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                                   {verifyingId === d.id ? 'Verifying...' : 'Confirm Payment'}
                                 </button>
                              )}
+                             {isAdmin && !d.rider && (
+                                <select onChange={(e) => handleAssignRider(d.id, e.target.value)} className="w-full bg-indigo-600 text-white text-[10px] font-bold px-3 py-2 rounded-lg outline-none" defaultValue="">
+                                    <option value="" disabled>Assign Rider</option>
+                                    {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                </select>
+                             )}
                         </div>
                     </div>
                 ))}
@@ -226,7 +241,20 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                         ) : deliveries.map((d) => (
                             <React.Fragment key={d.id}>
                                 <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                                    <td className="px-6 py-4 font-mono text-[10px] text-slate-400">#{d.id.slice(-5)}</td>
+                                    <td className="px-6 py-4">
+                                      <div className="flex flex-col gap-1">
+                                        <span className="font-mono text-[10px] text-slate-400">#{d.id.slice(-5)}</span>
+                                        {isSuperAdmin && (
+                                          <button 
+                                            onClick={() => handleDeleteOrder(d.id)}
+                                            className="w-fit p-1 text-rose-500 hover:bg-rose-50 rounded"
+                                            title="Delete Record"
+                                          >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
                                     <td className="px-6 py-4">
                                         <span className="font-bold text-slate-900 dark:text-white block">{d.customer.name}</span>
                                         <span className="text-[10px] text-slate-400 italic">{d.rider?.name || 'Unassigned'}</span>
@@ -277,15 +305,6 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                                                     <option value="" disabled>Assign</option>
                                                     {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                                                 </select>
-                                            )}
-                                            {isSuperAdmin && (d.status === DeliveryStatus.Delivered || d.status === DeliveryStatus.Failed) && (
-                                                <button 
-                                                    onClick={() => handleDeleteOrder(d.id)}
-                                                    className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg"
-                                                    title="Delete Order"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                </button>
                                             )}
                                         </div>
                                     </td>

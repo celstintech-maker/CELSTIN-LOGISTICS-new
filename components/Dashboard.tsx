@@ -1,5 +1,5 @@
 
-import React, { useContext, useState, useEffect, useMemo } from 'react';
+import React, { useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { AppContext } from '../App';
 import { Role, Delivery, RiderStatus } from '../types';
 import { CogIcon, TruckIcon, UserCircleIcon, MapIcon, ChartBarIcon } from './icons';
@@ -11,12 +11,35 @@ import MapView from './MapView';
 import VendorFinancials from './VendorFinancials';
 import UserProfile from './UserProfile';
 import LocationGuard from './LocationGuard';
+import { audioService, SOUNDS } from '../services/audioService';
 
 const Dashboard: React.FC = () => {
   const { currentUser, deliveries, handleUpdateUser } = useContext(AppContext);
   const [activeTab, setActiveTab] = useState('deliveries');
   const [selectedOrderForNav, setSelectedOrderForNav] = useState<Delivery | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const prevDeliveriesCount = useRef(deliveries.length);
+
+  // Play login sound once when dashboard loads
+  useEffect(() => {
+    if (audioUnlocked) {
+      audioService.play(SOUNDS.LOGIN);
+    }
+  }, [audioUnlocked]);
+
+  // Monitor for new orders
+  useEffect(() => {
+    if (deliveries.length > prevDeliveriesCount.current) {
+      audioService.play(SOUNDS.NEW_ORDER);
+    }
+    prevDeliveriesCount.current = deliveries.length;
+  }, [deliveries.length]);
+
+  const enableAudio = () => {
+    audioService.enable();
+    setAudioUnlocked(true);
+  };
 
   const userDeliveries = useMemo(() => deliveries.filter(d => {
     if (currentUser?.role === Role.SuperAdmin || currentUser?.role === Role.Admin) return true;
@@ -31,102 +54,75 @@ const Dashboard: React.FC = () => {
     setActiveTab('map');
   };
 
-  /**
-   * Resolves raw GPS to human-readable street + landmark
-   */
   const getStreetAndLandmark = async (lat: number, lng: number) => {
     try {
       const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
       const data = await response.json();
       const addr = data.address;
-      
       const landmark = addr.amenity || addr.building || addr.shop || addr.tourism || addr.historic || addr.office || addr.leisure || data.name;
       const road = addr.road || addr.suburb || addr.neighbourhood || 'Asaba Main Way';
-      
       if (landmark && landmark !== road && !road.includes(landmark)) {
         return `${road} (${landmark})`;
       }
       return road;
     } catch (error) {
-      console.error("Geocoding failure:", error);
       return 'Active Signal...';
     }
   };
 
-  // Manual Trigger for Location Broadcast
   const handleManualSync = async () => {
     if (!currentUser || isSyncing) return;
     setIsSyncing(true);
-    
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
         const exactAddress = await getStreetAndLandmark(latitude, longitude);
-        
         await handleUpdateUser(currentUser.id, { 
           location: { lat: latitude, lng: longitude },
           vehicle: exactAddress, 
           locationStatus: 'Active'
         });
-        
         setTimeout(() => setIsSyncing(false), 800);
       },
       (err) => {
         setIsSyncing(false);
-        console.error("GPS Signal Blocked", err);
       },
       { enableHighAccuracy: true }
     );
   };
 
-  // Continuous tracking effect for active riders
   useEffect(() => {
     let watchId: number | null = null;
-    
-    // Immediate broadcast on mount if rider is already Available
     if (currentUser?.role === Role.Rider && currentUser.riderStatus === 'Available') {
       handleManualSync();
-      
       if ("geolocation" in navigator) {
         watchId = navigator.geolocation.watchPosition(
           async (position) => {
             const { latitude, longitude } = position.coords;
             const exactAddress = await getStreetAndLandmark(latitude, longitude);
-            
             await handleUpdateUser(currentUser.id, { 
               location: { lat: latitude, lng: longitude },
               vehicle: exactAddress,
               locationStatus: 'Active'
             });
           },
-          (err) => console.error("Live Tracking Error:", err),
-          { 
-            enableHighAccuracy: true,
-            maximumAge: 1000, // Reduced age for fresher data
-            timeout: 15000
-          }
+          (err) => console.error(err),
+          { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
         );
       }
     }
-
-    return () => {
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-    };
+    return () => { if (watchId !== null) navigator.geolocation.clearWatch(watchId); };
   }, [currentUser?.role, currentUser?.riderStatus, currentUser?.id]);
 
   const handleClockToggle = async () => {
     if (!currentUser) return;
     const isClockingIn = currentUser.riderStatus !== 'Available';
-    
     if (isClockingIn) {
       setIsSyncing(true);
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
           const exactAddress = await getStreetAndLandmark(coords.lat, coords.lng);
-          
           await handleUpdateUser(currentUser.id, { 
             riderStatus: 'Available', 
             location: coords,
@@ -134,6 +130,7 @@ const Dashboard: React.FC = () => {
             vehicle: exactAddress
           });
           setIsSyncing(false);
+          audioService.play(SOUNDS.STATUS_CHANGE);
         },
         () => {
           setIsSyncing(false);
@@ -147,6 +144,7 @@ const Dashboard: React.FC = () => {
         locationStatus: 'Disabled',
         vehicle: 'Offline' 
       });
+      audioService.play(SOUNDS.STATUS_CHANGE);
     }
   };
 
@@ -165,6 +163,15 @@ const Dashboard: React.FC = () => {
       case 'deliveries':
         return (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+             {!audioUnlocked && (
+               <div className="bg-indigo-600 text-white p-4 rounded-2xl flex items-center justify-between shadow-lg shadow-indigo-600/20">
+                  <div className="flex items-center gap-3">
+                    <svg className="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                    <p className="text-xs font-bold uppercase tracking-widest">Enable system audio alerts?</p>
+                  </div>
+                  <button onClick={enableAudio} className="bg-white text-indigo-600 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-colors">Enable</button>
+               </div>
+             )}
              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                 <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4 transition-colors">
                     <div className="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl"><TruckIcon className="w-5 h-5" /></div>
@@ -218,7 +225,7 @@ const Dashboard: React.FC = () => {
   return (
     <LocationGuard>
       <div className="flex flex-col min-h-[calc(100vh-180px)]">
-        <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 px-1">
+        <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 px-1" onClick={!audioUnlocked ? enableAudio : undefined}>
           <div>
             <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight font-outfit uppercase">
               {availableTabs.find(t => t.id === activeTab)?.label || 'Dashboard'}
