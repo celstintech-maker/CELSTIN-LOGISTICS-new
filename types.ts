@@ -104,6 +104,7 @@ export interface SystemSettings {
     standardCommissionRate: number;
     pricePerKm: number; 
     baseStartingPrice: number;
+    minimumBasePrice: number;
 }
 
 export interface VendorPerformance {

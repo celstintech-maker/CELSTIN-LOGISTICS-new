@@ -27,8 +27,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
     const { currentUser, allUsers, systemSettings } = useContext(AppContext);
     const [verifyingId, setVerifyingId] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
-    const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
-    const [tempPrice, setTempPrice] = useState<string>('');
+    const [copyingId, setCopyingId] = useState<string | null>(null);
 
     const isAdmin = currentUser?.role === Role.SuperAdmin || currentUser?.role === Role.Admin;
     const isSuperAdmin = currentUser?.role === Role.SuperAdmin;
@@ -36,35 +35,13 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
     const handleStatusChange = async (id: string, newStatus: DeliveryStatus) => {
         try {
             const updates: any = { status: newStatus };
-            // If rider reports delivered, we trigger the payment reminder/verification phase
-            if (newStatus === DeliveryStatus.Delivered) {
-                console.log("Delivery reported. Initiating payment verification flow...");
-            }
             await updateData('deliveries', id, updates);
             
             if (newStatus === DeliveryStatus.Delivered) {
-                alert("Order reported as DELIVERED. Please ensure the customer has transferred the settlement to the business account.");
+                alert("Order reported as DELIVERED. Please ensure the customer has transferred the settlement to the business account shown below.");
             }
         } catch (error) {
             alert("Status update failed.");
-        }
-    };
-
-    const handlePriceUpdate = async (id: string) => {
-        const numericPrice = parseFloat(tempPrice);
-        if (isNaN(numericPrice) || numericPrice < 0) {
-            alert("Please enter a valid amount.");
-            return;
-        }
-        try {
-            await updateData('deliveries', id, { 
-                price: numericPrice,
-                priceModifiedByRider: true,
-                modifiedAt: new Date()
-            });
-            setEditingPriceId(null);
-        } catch (error) {
-            alert("Price update failed.");
         }
     };
 
@@ -81,6 +58,12 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
         } finally {
             setVerifyingId(null);
         }
+    };
+
+    const handleCopyAccount = (id: string) => {
+        navigator.clipboard.writeText(systemSettings.paymentAccountNumber);
+        setCopyingId(id);
+        setTimeout(() => setCopyingId(null), 2000);
     };
 
     const handleDeleteOrder = async (id: string) => {
@@ -122,6 +105,41 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
 
     const riders = allUsers.filter(u => u.role === Role.Rider && u.active !== false);
 
+    const AccountDetailsWidget = ({ deliveryId }: { deliveryId: string }) => (
+        <div className="mt-3 p-4 bg-emerald-50 dark:bg-emerald-500/5 rounded-2xl border border-emerald-100 dark:border-emerald-500/20 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-2 mb-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Awaiting Settlement Transfer</p>
+            </div>
+            <div className="grid grid-cols-1 gap-3">
+                <div>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Settlement Vault</p>
+                    <p className="text-xs font-bold text-slate-800 dark:text-white">{systemSettings.paymentBank}</p>
+                </div>
+                <div className="flex items-center justify-between group">
+                    <div>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Vault Index</p>
+                        <p className="text-sm font-black text-indigo-600 dark:text-indigo-400 font-mono tracking-tighter">{systemSettings.paymentAccountNumber}</p>
+                    </div>
+                    <button 
+                        onClick={() => handleCopyAccount(deliveryId)}
+                        className={`p-2 rounded-lg transition-all ${copyingId === deliveryId ? 'bg-emerald-500 text-white' : 'bg-white dark:bg-slate-800 text-slate-400 hover:text-indigo-500'}`}
+                    >
+                        {copyingId === deliveryId ? (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
+                        ) : (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                        )}
+                    </button>
+                </div>
+                <div>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Account Name</p>
+                    <p className="text-xs font-bold text-slate-800 dark:text-white truncate">{systemSettings.paymentAccountName}</p>
+                </div>
+            </div>
+        </div>
+    );
+
     return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
             <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
@@ -161,13 +179,17 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                                 </p>
                             </div>
                         </div>
+
+                        {d.status === DeliveryStatus.Delivered && d.paymentStatus === PaymentStatus.Unpaid && (
+                            <AccountDetailsWidget deliveryId={d.id} />
+                        )}
                         
                         <div className="flex flex-col gap-2">
                              {currentUser?.role === Role.Rider && d.rider?.id === currentUser.id && (
                                 <select 
                                     value={d.status} 
                                     onChange={(e) => handleStatusChange(d.id, e.target.value as DeliveryStatus)} 
-                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase rounded-lg px-2 py-2 shadow-sm"
+                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase rounded-lg px-2 py-2 shadow-sm outline-none"
                                 >
                                     {Object.values(DeliveryStatus).map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
@@ -202,71 +224,82 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                         {deliveries.length === 0 ? (
                             <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 italic">No records.</td></tr>
                         ) : deliveries.map((d) => (
-                            <tr key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                                <td className="px-6 py-4 font-mono text-[10px] text-slate-400">#{d.id.slice(-5)}</td>
-                                <td className="px-6 py-4">
-                                    <span className="font-bold text-slate-900 dark:text-white block">{d.customer.name}</span>
-                                    <span className="text-[10px] text-slate-400 italic">{d.rider?.name || 'Unassigned'}</span>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 block truncate max-w-[150px]">{d.dropoffAddress}</span>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-2">
-                                        <p className="font-bold text-slate-900 dark:text-white">₦{d.price.toLocaleString()}</p>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                      <p className={`text-[8px] font-black uppercase ${d.paymentStatus === PaymentStatus.Paid ? 'text-emerald-500' : 'text-rose-500 animate-pulse'}`}>
-                                        {d.paymentStatus}
-                                      </p>
-                                      {d.status === DeliveryStatus.Delivered && d.paymentStatus === PaymentStatus.Unpaid && (
-                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
-                                      )}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[9px] font-black uppercase border ${statusStyles[d.status]}`}>
-                                        {d.status}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    <div className="flex items-center justify-end gap-2">
-                                        {currentUser?.role === Role.Rider && d.rider?.id === currentUser.id && (
-                                            <select 
-                                              value={d.status} 
-                                              onChange={(e) => handleStatusChange(d.id, e.target.value as DeliveryStatus)} 
-                                              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-[10px] font-bold"
-                                            >
-                                                {Object.values(DeliveryStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                                            </select>
-                                        )}
-                                        {isSuperAdmin && d.status === DeliveryStatus.Delivered && d.paymentStatus === PaymentStatus.Unpaid && (
-                                            <button 
-                                              onClick={() => handleVerifyPayment(d.id)}
-                                              disabled={verifyingId === d.id}
-                                              className="bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all shadow-md shadow-emerald-500/20"
-                                            >
-                                              {verifyingId === d.id ? 'Processing...' : 'Verify Cash'}
-                                            </button>
-                                        )}
-                                        {isAdmin && !d.rider && (
-                                            <select onChange={(e) => handleAssignRider(d.id, e.target.value)} className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1.5 rounded-lg outline-none" defaultValue="">
-                                                <option value="" disabled>Assign</option>
-                                                {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                                            </select>
-                                        )}
-                                        {isSuperAdmin && (d.status === DeliveryStatus.Delivered || d.status === DeliveryStatus.Failed) && (
-                                            <button 
-                                                onClick={() => handleDeleteOrder(d.id)}
-                                                className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg"
-                                                title="Delete Order"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                            </button>
-                                        )}
-                                    </div>
-                                </td>
-                            </tr>
+                            <React.Fragment key={d.id}>
+                                <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                                    <td className="px-6 py-4 font-mono text-[10px] text-slate-400">#{d.id.slice(-5)}</td>
+                                    <td className="px-6 py-4">
+                                        <span className="font-bold text-slate-900 dark:text-white block">{d.customer.name}</span>
+                                        <span className="text-[10px] text-slate-400 italic">{d.rider?.name || 'Unassigned'}</span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 block truncate max-w-[150px]">{d.dropoffAddress}</span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-bold text-slate-900 dark:text-white">₦{d.price.toLocaleString()}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                          <p className={`text-[8px] font-black uppercase ${d.paymentStatus === PaymentStatus.Paid ? 'text-emerald-500' : 'text-rose-500 animate-pulse'}`}>
+                                            {d.paymentStatus}
+                                          </p>
+                                          {d.status === DeliveryStatus.Delivered && d.paymentStatus === PaymentStatus.Unpaid && (
+                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                                          )}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[9px] font-black uppercase border ${statusStyles[d.status]}`}>
+                                            {d.status}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                            {currentUser?.role === Role.Rider && d.rider?.id === currentUser.id && (
+                                                <select 
+                                                  value={d.status} 
+                                                  onChange={(e) => handleStatusChange(d.id, e.target.value as DeliveryStatus)} 
+                                                  className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-[10px] font-bold outline-none"
+                                                >
+                                                    {Object.values(DeliveryStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                                                </select>
+                                            )}
+                                            {isSuperAdmin && d.status === DeliveryStatus.Delivered && d.paymentStatus === PaymentStatus.Unpaid && (
+                                                <button 
+                                                  onClick={() => handleVerifyPayment(d.id)}
+                                                  disabled={verifyingId === d.id}
+                                                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all shadow-md shadow-emerald-500/20"
+                                                >
+                                                  {verifyingId === d.id ? 'Processing...' : 'Verify Cash'}
+                                                </button>
+                                            )}
+                                            {isAdmin && !d.rider && (
+                                                <select onChange={(e) => handleAssignRider(d.id, e.target.value)} className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1.5 rounded-lg outline-none" defaultValue="">
+                                                    <option value="" disabled>Assign</option>
+                                                    {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                                </select>
+                                            )}
+                                            {isSuperAdmin && (d.status === DeliveryStatus.Delivered || d.status === DeliveryStatus.Failed) && (
+                                                <button 
+                                                    onClick={() => handleDeleteOrder(d.id)}
+                                                    className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg"
+                                                    title="Delete Order"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {d.status === DeliveryStatus.Delivered && d.paymentStatus === PaymentStatus.Unpaid && (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 pb-4 pt-0">
+                                            <div className="max-w-md ml-auto">
+                                                <AccountDetailsWidget deliveryId={d.id} />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </React.Fragment>
                         ))}
                     </tbody>
                 </table>

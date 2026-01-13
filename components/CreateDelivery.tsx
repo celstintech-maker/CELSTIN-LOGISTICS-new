@@ -9,7 +9,7 @@ const CreateDelivery: React.FC = () => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    const [estimatedPrice, setEstimatedPrice] = useState<number>(1500);
+    const [estimatedPrice, setEstimatedPrice] = useState<number>(systemSettings.minimumBasePrice || 1500);
     const [estimatedMinutes, setEstimatedMinutes] = useState<number>(0);
     const [origin, setOrigin] = useState('');
     const [destination, setDestination] = useState('');
@@ -20,18 +20,19 @@ const CreateDelivery: React.FC = () => {
             const seed = (origin.trim().length + destination.trim().length) % 15;
             const estimatedKm = 5 + seed;
             
-            // Calculate price
-            const price = Math.max(1500, estimatedKm * systemSettings.pricePerKm);
+            // Calculate price using dynamic base from settings
+            const basePrice = systemSettings.minimumBasePrice || 1500;
+            const price = Math.max(basePrice, estimatedKm * systemSettings.pricePerKm);
             setEstimatedPrice(price);
 
             // Calculate estimated delivery time (minutes)
             const modeMultiplier = transportMode === 'Bike' ? 2.5 : transportMode === 'Truck' ? 4 : 6;
             setEstimatedMinutes(Math.round(estimatedKm * modeMultiplier));
         } else {
-            setEstimatedPrice(1500);
+            setEstimatedPrice(systemSettings.minimumBasePrice || 1500);
             setEstimatedMinutes(0);
         }
-    }, [origin, destination, transportMode, systemSettings.pricePerKm]);
+    }, [origin, destination, transportMode, systemSettings.pricePerKm, systemSettings.minimumBasePrice]);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();

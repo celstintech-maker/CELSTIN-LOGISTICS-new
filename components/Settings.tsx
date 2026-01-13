@@ -35,8 +35,13 @@ const Settings: React.FC = () => {
     const handleSave = async () => {
         setSaveStatus('saving');
         try {
-          await setDoc(doc(db, "settings", "global"), settings);
-          setSystemSettings(settings);
+          // Fallback for minimumBasePrice if not already in the object
+          const payload = { 
+            ...settings, 
+            minimumBasePrice: settings.minimumBasePrice || 1500 
+          };
+          await setDoc(doc(db, "settings", "global"), payload);
+          setSystemSettings(payload);
           setSaveStatus('saved');
           setTimeout(() => setSaveStatus('idle'), 2000);
         } catch (e) {
@@ -103,6 +108,19 @@ const Settings: React.FC = () => {
                                     onChange={handleInputChange} 
                                     className="form-input pl-10" 
                                     placeholder="150"
+                                />
+                                </div>
+                            </FormField>
+                            <FormField label="Minimum Base Delivery Price (₦)">
+                                <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">₦</span>
+                                <input 
+                                    type="number" 
+                                    name="minimumBasePrice" 
+                                    value={settings.minimumBasePrice || 1500} 
+                                    onChange={handleInputChange} 
+                                    className="form-input pl-10" 
+                                    placeholder="1500"
                                 />
                                 </div>
                             </FormField>

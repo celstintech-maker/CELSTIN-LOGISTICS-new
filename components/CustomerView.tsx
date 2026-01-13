@@ -16,7 +16,7 @@ const CustomerView: React.FC = () => {
     
     const [origin, setOrigin] = useState('');
     const [destination, setDestination] = useState('');
-    const [pricePreview, setPricePreview] = useState<number>(1500);
+    const [pricePreview, setPricePreview] = useState<number>(systemSettings.minimumBasePrice || 1500);
     const [isDetectingLocation, setIsDetectingLocation] = useState(false);
 
     // Address resolution helper
@@ -51,12 +51,13 @@ const CustomerView: React.FC = () => {
         if (origin.trim() && destination.trim()) {
             const seed = (origin.trim().length + destination.trim().length) % 15;
             const estimatedKm = 5 + seed;
-            const price = Math.max(1500, estimatedKm * systemSettings.pricePerKm);
+            const basePrice = systemSettings.minimumBasePrice || 1500;
+            const price = Math.max(basePrice, estimatedKm * systemSettings.pricePerKm);
             setPricePreview(price);
         } else {
-            setPricePreview(1500);
+            setPricePreview(systemSettings.minimumBasePrice || 1500);
         }
-    }, [origin, destination, systemSettings.pricePerKm]);
+    }, [origin, destination, systemSettings.pricePerKm, systemSettings.minimumBasePrice]);
 
     useEffect(() => {
         if (!lastDeliveryId) return;
@@ -148,7 +149,7 @@ const CustomerView: React.FC = () => {
                               placeholder="Where should we pick up?" 
                           />
                           <div className="absolute right-3 bottom-3 text-indigo-500">
-                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                           </div>
                       </div>
                       <div className="space-y-2">

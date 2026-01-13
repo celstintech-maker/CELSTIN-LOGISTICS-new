@@ -27,6 +27,7 @@ export interface RecoveryRequest {
   timestamp: Date;
 }
 
+// Fixed missing minimumBasePrice property in DEFAULT_SETTINGS
 const DEFAULT_SETTINGS: SystemSettings = {
   businessName: 'CLESTIN LOGISTICS',
   businessAddress: '123 Logistics Way, Asaba, Delta State',
@@ -41,7 +42,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   theme: 'dark',
   standardCommissionRate: 0.1,
   pricePerKm: 150,
-  baseStartingPrice: 3000
+  baseStartingPrice: 3000,
+  minimumBasePrice: 1500
 };
 
 export const AppContext = React.createContext<{
