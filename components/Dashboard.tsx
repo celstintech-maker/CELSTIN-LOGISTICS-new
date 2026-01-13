@@ -24,18 +24,18 @@ const Dashboard: React.FC = () => {
 
   // Play login sound once when dashboard loads
   useEffect(() => {
-    if (audioUnlocked && !isMuted) {
+    if (audioUnlocked && !isMuted && systemSettings?.systemSounds?.login) {
       audioService.play(systemSettings.systemSounds.login);
     }
-  }, [audioUnlocked]);
+  }, [audioUnlocked, isMuted, systemSettings?.systemSounds?.login]);
 
   // Monitor for new orders
   useEffect(() => {
-    if (deliveries.length > prevDeliveriesCount.current && audioUnlocked && !isMuted) {
+    if (deliveries.length > prevDeliveriesCount.current && audioUnlocked && !isMuted && systemSettings?.systemSounds?.newOrder) {
       audioService.play(systemSettings.systemSounds.newOrder);
     }
     prevDeliveriesCount.current = deliveries.length;
-  }, [deliveries.length, systemSettings.systemSounds.newOrder, audioUnlocked, isMuted]);
+  }, [deliveries.length, systemSettings?.systemSounds?.newOrder, audioUnlocked, isMuted]);
 
   const enableAudio = () => {
     audioService.enable();
@@ -138,7 +138,9 @@ const Dashboard: React.FC = () => {
             vehicle: exactAddress
           });
           setIsSyncing(false);
-          if (audioUnlocked && !isMuted) audioService.play(systemSettings.systemSounds.statusChange);
+          if (audioUnlocked && !isMuted && systemSettings?.systemSounds?.statusChange) {
+            audioService.play(systemSettings.systemSounds.statusChange);
+          }
         },
         () => {
           setIsSyncing(false);
@@ -152,7 +154,9 @@ const Dashboard: React.FC = () => {
         locationStatus: 'Disabled',
         vehicle: 'Offline' 
       });
-      if (audioUnlocked && !isMuted) audioService.play(systemSettings.systemSounds.statusChange);
+      if (audioUnlocked && !isMuted && systemSettings?.systemSounds?.statusChange) {
+        audioService.play(systemSettings.systemSounds.statusChange);
+      }
     }
   };
 

@@ -114,7 +114,15 @@ const App: React.FC = () => {
   
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
     const saved = localStorage.getItem('clestin_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return { ...DEFAULT_SETTINGS, ...parsed };
+      } catch (e) {
+        return DEFAULT_SETTINGS;
+      }
+    }
+    return DEFAULT_SETTINGS;
   });
 
   const handleApproveUser = async (userId: string) => {
@@ -162,8 +170,8 @@ const App: React.FC = () => {
     const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as SystemSettings;
-        setSystemSettings(data);
-        localStorage.setItem('clestin_settings', JSON.stringify(data));
+        setSystemSettings(prev => ({ ...prev, ...data }));
+        localStorage.setItem('clestin_settings', JSON.stringify({ ...DEFAULT_SETTINGS, ...data }));
       }
     });
     const unsubUsers = syncCollection('users', (data) => setAllUsers(data as User[]), (err) => { setIsCloudConnected(false); setCloudError(err.message); });
