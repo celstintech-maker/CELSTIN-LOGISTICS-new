@@ -40,16 +40,25 @@ const CreateDelivery: React.FC = () => {
         setIsSubmitting(true);
         const formData = new FormData(form);
         
+        // Check if the current user is a rider to auto-assign
+        const isCurrentRider = currentUser?.role === Role.Rider;
+
         const newDelivery: any = {
             customer: {
                 id: `cust-${Date.now()}`,
                 name: (formData.get('customerName') as string || 'Guest').trim(),
                 phone: (formData.get('customerPhone') as string || '080').trim(),
             },
+            rider: isCurrentRider ? {
+                id: currentUser.id,
+                name: currentUser.name,
+                phone: currentUser.phone,
+                profilePicture: currentUser.profilePicture || ''
+            } : null,
             pickupAddress: origin.trim(),
             dropoffAddress: destination.trim(),
             packageNotes: (formData.get('packageNotes') as string || 'General Delivery').trim(),
-            status: DeliveryStatus.Pending,
+            status: isCurrentRider ? DeliveryStatus.Assigned : DeliveryStatus.Pending,
             paymentStatus: PaymentStatus.Unpaid,
             price: Number(estimatedPrice),
             estimatedMinutes,
