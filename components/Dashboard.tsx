@@ -22,14 +22,12 @@ const Dashboard: React.FC = () => {
   const [isMuted, setIsMuted] = useState(audioService.isMuted());
   const prevDeliveriesCount = useRef(deliveries.length);
 
-  // Play login sound once when dashboard loads
   useEffect(() => {
     if (audioUnlocked && !isMuted && systemSettings?.systemSounds?.login) {
       audioService.play(systemSettings.systemSounds.login);
     }
   }, [audioUnlocked, isMuted, systemSettings?.systemSounds?.login]);
 
-  // Monitor for new orders
   useEffect(() => {
     if (deliveries.length > prevDeliveriesCount.current && audioUnlocked && !isMuted && systemSettings?.systemSounds?.newOrder) {
       audioService.play(systemSettings.systemSounds.newOrder);
@@ -95,14 +93,13 @@ const Dashboard: React.FC = () => {
       (err) => {
         setIsSyncing(false);
       },
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, maximumAge: 0 }
     );
   };
 
   useEffect(() => {
     let watchId: number | null = null;
     if (currentUser?.role === Role.Rider && currentUser.riderStatus === 'Available') {
-      handleManualSync();
       if ("geolocation" in navigator) {
         watchId = navigator.geolocation.watchPosition(
           async (position) => {
@@ -114,8 +111,12 @@ const Dashboard: React.FC = () => {
               locationStatus: 'Active'
             });
           },
-          (err) => console.error(err),
-          { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+          (err) => console.error("Watcher Error:", err),
+          { 
+            enableHighAccuracy: true, 
+            maximumAge: 0, 
+            timeout: 5000 
+          }
         );
       }
     }
@@ -146,7 +147,7 @@ const Dashboard: React.FC = () => {
           setIsSyncing(false);
           alert("GPS signal required to begin shift.");
         },
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true, maximumAge: 0 }
       );
     } else {
       await handleUpdateUser(currentUser.id, { 
