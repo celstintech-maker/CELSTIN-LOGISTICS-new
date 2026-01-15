@@ -197,7 +197,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                             </div>
                         </div>
 
-                        {expandedPaymentId === d.id && d.status === DeliveryStatus.Delivered && (
+                        {(expandedPaymentId === d.id || (isAdmin && d.riderPaymentVerified && d.paymentStatus === PaymentStatus.Unpaid)) && d.status === DeliveryStatus.Delivered && (
                             <AccountDetailsWidget delivery={d} />
                         )}
                         
@@ -222,7 +222,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                                </button>
                              )}
 
-                             {isAdmin && d.paymentStatus === PaymentStatus.Unpaid && (
+                             {isAdmin && d.paymentStatus === PaymentStatus.Unpaid && d.status === DeliveryStatus.Delivered && (
                                 <button 
                                   onClick={() => handleAdminConfirmPayment(d.id)}
                                   disabled={verifyingId === d.id}
@@ -313,7 +313,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                                               </button>
                                             )}
 
-                                            {isAdmin && d.paymentStatus === PaymentStatus.Unpaid && (
+                                            {isAdmin && d.paymentStatus === PaymentStatus.Unpaid && d.status === DeliveryStatus.Delivered && (
                                                 <button 
                                                   onClick={() => handleAdminConfirmPayment(d.id)}
                                                   disabled={verifyingId === d.id}
@@ -336,7 +336,7 @@ const DeliveriesTable: React.FC<DeliveriesTableProps> = ({ title, deliveries, on
                                         </div>
                                     </td>
                                 </tr>
-                                {(expandedPaymentId === d.id || (isAdmin && d.riderPaymentVerified && d.paymentStatus === PaymentStatus.Unpaid)) && (
+                                {(expandedPaymentId === d.id || (isAdmin && d.riderPaymentVerified && d.paymentStatus === PaymentStatus.Unpaid)) && d.status === DeliveryStatus.Delivered && (
                                     <tr>
                                         <td colSpan={6} className="px-6 pb-4 pt-0">
                                             <div className="max-w-md ml-auto">
