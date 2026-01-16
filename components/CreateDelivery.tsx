@@ -10,13 +10,14 @@ const CreateDelivery: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     const [estimatedPrice, setEstimatedPrice] = useState<number>(systemSettings.minimumBasePrice || 1500);
+    const [isManualPrice, setIsManualPrice] = useState(false);
     const [estimatedMinutes, setEstimatedMinutes] = useState<number>(0);
     const [origin, setOrigin] = useState('');
     const [destination, setDestination] = useState('');
     const [transportMode, setTransportMode] = useState<VehicleMode>('Bike');
 
     useEffect(() => {
-        if (origin.trim() && destination.trim()) {
+        if (origin.trim() && destination.trim() && !isManualPrice) {
             const seed = (origin.trim().length + destination.trim().length) % 15;
             const estimatedKm = 5 + seed;
             
@@ -28,11 +29,24 @@ const CreateDelivery: React.FC = () => {
             // Calculate estimated delivery time (minutes)
             const modeMultiplier = transportMode === 'Bike' ? 2.5 : transportMode === 'Truck' ? 4 : 6;
             setEstimatedMinutes(Math.round(estimatedKm * modeMultiplier));
-        } else {
-            setEstimatedPrice(systemSettings.minimumBasePrice || 1500);
+        } else if (!origin.trim() || !destination.trim()) {
+            if (!isManualPrice) {
+                setEstimatedPrice(systemSettings.minimumBasePrice || 1500);
+            }
             setEstimatedMinutes(0);
         }
-    }, [origin, destination, transportMode, systemSettings.pricePerKm, systemSettings.minimumBasePrice]);
+    }, [origin, destination, transportMode, systemSettings.pricePerKm, systemSettings.minimumBasePrice, isManualPrice]);
+
+    const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = parseFloat(e.target.value);
+        setIsManualPrice(true);
+        setEstimatedPrice(isNaN(value) ? 0 : value);
+    };
+
+    const resetManualPrice = () => {
+        setIsManualPrice(false);
+        // This will trigger the useEffect to recalculate
+    };
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -40,6 +54,9 @@ const CreateDelivery: React.FC = () => {
         setIsSubmitting(true);
         const formData = new FormData(form);
         
+        // Ensure price is at least minimum
+        const finalPrice = Math.max(estimatedPrice, systemSettings.minimumBasePrice || 1500);
+
         // Check if the current user is a rider to auto-assign
         const isCurrentRider = currentUser?.role === Role.Rider;
 
@@ -60,7 +77,7 @@ const CreateDelivery: React.FC = () => {
             packageNotes: (formData.get('packageNotes') as string || 'General Delivery').trim(),
             status: isCurrentRider ? DeliveryStatus.Assigned : DeliveryStatus.Pending,
             paymentStatus: PaymentStatus.Unpaid,
-            price: Number(estimatedPrice),
+            price: Number(finalPrice),
             estimatedMinutes,
             transportMode,
             vendorId: currentUser?.role === Role.Vendor ? currentUser.id : 'staff-direct',
@@ -74,8 +91,9 @@ const CreateDelivery: React.FC = () => {
             form.reset();
             setOrigin('');
             setDestination('');
+            setIsManualPrice(false);
             setIsExpanded(false);
-            alert(`Order logged. Please transfer ₦${estimatedPrice.toLocaleString()} to ${systemSettings.paymentAccountNumber} for verification.`);
+            alert(`Order logged. Please transfer ₦${finalPrice.toLocaleString()} to ${systemSettings.paymentAccountNumber} for verification.`);
         } catch (error: any) {
             console.error("Broadcast Error Details:", error);
             alert(`Error broadcasting order: ${error.message || 'Connection failed.'}`);
@@ -202,14 +220,45 @@ const CreateDelivery: React.FC = () => {
                 </div>
 
                 <div className="md:col-span-2 flex flex-col sm:flex-row justify-between items-center gap-6 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-                    <div className="flex gap-8">
-                        <div className="text-center sm:text-left">
+                    <div className="flex gap-8 w-full sm:w-auto">
+                        <div className="text-center sm:text-left shrink-0">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Travel Time</p>
                             <p className="text-lg font-black text-slate-600 dark:text-slate-400">~{estimatedMinutes} MINS</p>
                         </div>
-                        <div className="text-center sm:text-left">
-                            <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">Estimated Total</p>
-                            <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">₦{estimatedPrice.toLocaleString()}</p>
+                        <div className="text-center sm:text-left flex-grow">
+                            <div className="flex items-center justify-between sm:justify-start gap-2 mb-1">
+                                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Delivery Price (₦)</p>
+                                {isManualPrice && (
+                                    <button 
+                                        type="button" 
+                                        onClick={resetManualPrice}
+                                        className="text-[8px] font-black text-rose-500 uppercase underline"
+                                    >
+                                        Auto-Estimate
+                                    </button>
+                                )}
+                            </div>
+                            <div className="relative group max-w-[200px]">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-indigo-400">₦</span>
+                                <input 
+                                    type="number" 
+                                    value={estimatedPrice}
+                                    onChange={handlePriceChange}
+                                    className={`w-full bg-slate-50 dark:bg-slate-950 border-2 rounded-2xl pl-10 pr-4 py-3 text-xl font-black outline-none transition-all ${
+                                        isManualPrice 
+                                        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' 
+                                        : 'border-transparent text-slate-700 dark:text-slate-300'
+                                    }`}
+                                />
+                                {isManualPrice && (
+                                    <div className="absolute -top-1 -right-1 flex">
+                                        <span className="flex h-3 w-3">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <button 
@@ -236,6 +285,14 @@ const CreateDelivery: React.FC = () => {
                 }
                 .dark .form-input-v2 { background: #020617; border-color: #1e293b; color: white; }
                 .form-input-v2:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }
+                input[type=number]::-webkit-inner-spin-button, 
+                input[type=number]::-webkit-outer-spin-button { 
+                    -webkit-appearance: none; 
+                    margin: 0; 
+                }
+                input[type=number] {
+                    -moz-appearance: textfield;
+                }
             `}</style>
         </div>
     );
