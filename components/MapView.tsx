@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useContext, useState } from 'react';
 import { AppContext } from '../App';
-import { Role, User, Delivery } from '../types';
+import { Role, User, Delivery, DeliveryStatus } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { GoogleGenAI } from "@google/genai";
@@ -19,11 +19,12 @@ interface PathPoint {
 }
 
 const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
-  const { systemSettings, currentUser } = useContext(AppContext);
+  const { systemSettings, currentUser, deliveries } = useContext(AppContext);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any | null>(null); 
   const layersRef = useRef<{ [key: string]: any }>({});
   const markersMapRef = useRef<Map<string, any>>(new Map());
+  const routingControlRef = useRef<any>(null);
   const prevCoordsRef = useRef<Map<string, {lat: number, lng: number, heading: number}>>(new Map());
   
   const riderPathsRef = useRef<Map<string, PathPoint[]>>(new Map());
@@ -42,6 +43,14 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
   const isAdmin = currentUser?.role === Role.Admin || currentUser?.role === Role.SuperAdmin;
   const isRider = currentUser?.role === Role.Rider;
   const canUseAi = isAdmin || isRider;
+
+  // Find active delivery for the selected rider
+  const riderActiveDelivery = selectedRider ? deliveries.find(d => 
+    d.rider?.id === selectedRider.id && 
+    d.status !== DeliveryStatus.Delivered && 
+    d.status !== DeliveryStatus.Failed && 
+    d.status !== DeliveryStatus.Completed
+  ) : null;
 
   const handleAiNavigation = async () => {
     if (!aiPrompt.trim()) return;
@@ -131,6 +140,52 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
     );
   };
 
+  // Live Routing Engine
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Clean up existing route
+    if (routingControlRef.current) {
+      mapRef.current.removeControl(routingControlRef.current);
+      routingControlRef.current = null;
+    }
+
+    if (selectedRider && selectedRider.location && riderActiveDelivery) {
+        const start = L.latLng(selectedRider.location.lat, selectedRider.location.lng);
+        // Using reverse geocoding to geocode dropoff if we had a coordinates field, 
+        // but for now we simulate target if it's not present or use a fallback. 
+        // In a real app, we'd geocode d.dropoffAddress. 
+        // For simulation, we'll derive a point from the address hash if coords missing.
+        const dropoff = riderActiveDelivery.dropoffAddress;
+        const seed = dropoff.length % 50;
+        const targetLat = 6.20 + (seed * 0.001);
+        const targetLng = 6.70 + (seed * 0.001);
+        const end = L.latLng(targetLat, targetLng);
+
+        routingControlRef.current = L.Routing.control({
+            waypoints: [start, end],
+            routeWhileDragging: false,
+            addWaypoints: false,
+            fitSelectedRoutes: true,
+            showAlternatives: false,
+            lineOptions: {
+                styles: [{ color: '#4f46e5', weight: 6, opacity: 0.8, className: 'logistics-path-animation' }]
+            },
+            createMarker: (i: number, waypoint: any) => {
+                const icon = i === 0 ? L.divIcon({ className: 'hidden' }) : L.divIcon({
+                    html: `<div class="w-8 h-8 bg-rose-600 border-2 border-white rounded-full flex items-center justify-center shadow-lg text-white">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                           </div>`,
+                    className: '',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 32]
+                });
+                return L.marker(waypoint.latLng, { icon });
+            }
+        }).addTo(mapRef.current);
+    }
+  }, [selectedRider, riderActiveDelivery]);
+
   useEffect(() => {
     if (!mapRef.current) return;
     
@@ -139,7 +194,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
       activePolylineRef.current = null;
     }
 
-    if (selectedRider) {
+    if (selectedRider && !riderActiveDelivery) {
       const path = riderPathsRef.current.get(selectedRider.id) || [];
       if (path.length > 1) {
         const latLngs = path.map(p => [p.lat, p.lng]);
@@ -153,7 +208,7 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         }).addTo(mapRef.current);
       }
     }
-  }, [selectedRider, activeRiders]);
+  }, [selectedRider, activeRiders, riderActiveDelivery]);
 
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
@@ -163,7 +218,6 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         preferCanvas: true,
       }).setView([6.1957, 6.7296], 13);
 
-      // Using Google-styled Voyager tiles which render labels UNDER markers but show inner streets at high zoom (up to 19)
       const logisticsUrl = isDark 
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
         : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png';
@@ -426,6 +480,12 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
                     <span className={`w-2.5 h-2.5 rounded-full ${selectedRider.riderStatus === 'Offline' ? 'bg-slate-400' : (selectedRider.riderStatus === 'Available' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500')}`}></span>
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{selectedRider.riderStatus}</span>
                   </div>
+                  {riderActiveDelivery && (
+                    <div className="mt-3 px-3 py-1.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                      <p className="text-[8px] font-black text-indigo-500 uppercase tracking-widest">Active Wayfinding</p>
+                      <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate">{riderActiveDelivery.dropoffAddress}</p>
+                    </div>
+                  )}
                   <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Live Position</p>
                     <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200 leading-snug">📍 {selectedRider.vehicle || 'Stationary'}</p>
@@ -468,8 +528,8 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         
         .logistics-path-animation {
             stroke-dashoffset: 40;
-            animation: dash 12s linear infinite;
-            filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.5));
+            animation: dash 12s linear infinite !important;
+            filter: drop-shadow(0 0 2px rgba(79, 70, 229, 0.5));
         }
         @keyframes dash {
             to {

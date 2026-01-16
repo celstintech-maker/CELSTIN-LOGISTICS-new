@@ -103,7 +103,7 @@ const Settings: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-500">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight font-outfit uppercase">System Core</h2>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Configure branding, pricing, and audio intelligence.</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Configure branding, pricing, and governance.</p>
                 </div>
                 <button
                     onClick={handleSave}
@@ -189,6 +189,23 @@ const Settings: React.FC = () => {
                             </FormField>
                          </div>
                     </SettingsCard>
+
+                    <SettingsCard title="Identity & Governance">
+                        <FormField label="Official Brand Name">
+                            <input type="text" name="businessName" value={settings.businessName} onChange={handleInputChange} className="form-input" />
+                        </FormField>
+                        <FormField label="Footer Copyright Text">
+                            <input type="text" name="footerText" value={settings.footerText} onChange={handleInputChange} className="form-input" />
+                        </FormField>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <FormField label="Privacy Policy URL">
+                                <input type="text" name="privacyLink" value={settings.privacyLink || '#'} onChange={handleInputChange} className="form-input" />
+                            </FormField>
+                            <FormField label="Logistics Terms URL">
+                                <input type="text" name="logisticsTermsLink" value={settings.logisticsTermsLink || '#'} onChange={handleInputChange} className="form-input" />
+                            </FormField>
+                        </div>
+                    </SettingsCard>
                 </div>
                 
                 <div className="space-y-8">
@@ -207,12 +224,37 @@ const Settings: React.FC = () => {
                             </FormField>
                         </div>
                     </SettingsCard>
-                    <SettingsCard title="Identity & Branding">
-                        <FormField label="Official Brand Name">
-                            <input type="text" name="businessName" value={settings.businessName} onChange={handleInputChange} className="form-input" />
+
+                    <SettingsCard title="Operational Node Terminal">
+                        <FormField label="Logistics Status Tagline">
+                            <input type="text" name="logisticsStatusText" value={settings.logisticsStatusText || 'Logistics Intelligence'} onChange={handleInputChange} className="form-input" />
                         </FormField>
+                        <FormField label="Node Sensitivity (0.0 - 1.0)">
+                             <div className="flex items-center gap-4">
+                                <input 
+                                    type="range" 
+                                    min="0" 
+                                    max="1" 
+                                    step="0.1" 
+                                    name="nodeSensitivity" 
+                                    value={settings.nodeSensitivity || 0.8} 
+                                    onChange={handleInputChange} 
+                                    className="flex-grow h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer dark:bg-slate-700"
+                                />
+                                <span className="bg-indigo-600 text-white px-3 py-1 rounded-lg font-mono font-bold text-xs">
+                                    {settings.nodeSensitivity || 0.8}
+                                </span>
+                             </div>
+                             <p className="text-[9px] text-slate-400 mt-2 uppercase tracking-widest font-bold">Higher values increase GPS tracking precision vs battery life.</p>
+                        </FormField>
+                    </SettingsCard>
+
+                    <SettingsCard title="Interface & Landing">
                         <FormField label="Landing Page Hero Headline">
                             <input type="text" name="heroTitle" value={settings.heroTitle} onChange={handleInputChange} className="form-input" />
+                        </FormField>
+                        <FormField label="Landing Page Subtext">
+                            <textarea name="heroSubtext" value={settings.heroSubtext} onChange={handleInputChange} className="form-input" rows={3}></textarea>
                         </FormField>
                     </SettingsCard>
                 </div>

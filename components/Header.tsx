@@ -33,7 +33,7 @@ const Header: React.FC = () => {
            )}
            <div className="flex flex-col">
               <h1 className="text-base md:text-xl font-black text-slate-900 dark:text-white tracking-tight leading-none uppercase font-outfit">{systemSettings.businessName}</h1>
-              <p className="hidden md:block text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Logistics Intelligence</p>
+              <p className="hidden md:block text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{systemSettings.logisticsStatusText || 'Logistics Intelligence'}</p>
            </div>
         </div>
         

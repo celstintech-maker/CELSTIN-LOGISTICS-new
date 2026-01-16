@@ -12,10 +12,10 @@ const Footer: React.FC = () => {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
             <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
         </div>
-        <p className="text-slate-500 text-sm font-medium tracking-wide">{systemSettings.footerText}</p>
+        <p className="text-slate-500 text-sm font-medium tracking-wide text-center">{systemSettings.footerText}</p>
         <div className="mt-4 flex gap-6 text-[10px] font-bold text-slate-600 uppercase tracking-widest">
-            <a href="#" className="hover:text-indigo-400 transition-colors">Privacy</a>
-            <a href="#" className="hover:text-indigo-400 transition-colors">Logistics Terms</a>
+            <a href={systemSettings.privacyLink || '#'} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-400 transition-colors">Privacy</a>
+            <a href={systemSettings.logisticsTermsLink || '#'} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-400 transition-colors">Logistics Terms</a>
             <a href="#" className="hover:text-indigo-400 transition-colors">Node Security</a>
         </div>
       </div>

@@ -108,6 +108,10 @@ export interface SystemSettings {
     paymentAccountNumber: string;
     paymentBank: string;
     footerText: string;
+    privacyLink?: string;
+    logisticsTermsLink?: string;
+    logisticsStatusText?: string;
+    nodeSensitivity?: number;
     theme: 'light' | 'dark';
     standardCommissionRate: number;
     pricePerKm: number; 
