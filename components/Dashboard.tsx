@@ -1,7 +1,7 @@
 
 import React, { useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { AppContext } from '../App';
-import { Role, Delivery, RiderStatus } from '../types';
+import { Role, Delivery, RiderStatus, DeliveryStatus, PaymentStatus } from '../types';
 import { CogIcon, TruckIcon, UserCircleIcon, MapIcon, ChartBarIcon } from './icons';
 import DeliveriesTable from './DeliveriesTable';
 import CreateDelivery from './CreateDelivery';
@@ -30,6 +30,41 @@ const Dashboard: React.FC = () => {
       setIsMuted(false);
     }
   }, [audioUnlocked]);
+
+  // Persistent Notification Logic
+  const pendingActions = useMemo(() => {
+    return deliveries.filter(d => {
+      const isPendingStatus = d.status === DeliveryStatus.Pending;
+      const isUnpaidDelivered = d.status === DeliveryStatus.Delivered && d.paymentStatus === PaymentStatus.Unpaid;
+      
+      if (currentUser?.role === Role.SuperAdmin || currentUser?.role === Role.Admin) {
+        return isPendingStatus || isUnpaidDelivered;
+      }
+      if (currentUser?.role === Role.Rider) {
+        return (isPendingStatus) || (d.rider?.id === currentUser.id && isUnpaidDelivered);
+      }
+      return false;
+    });
+  }, [deliveries, currentUser]);
+
+  // Continuous Sound Interval for Pending Actions
+  useEffect(() => {
+    let interval: number | null = null;
+    
+    if (pendingActions.length > 0 && audioUnlocked && !isMuted) {
+      // Play immediately
+      audioService.play(systemSettings?.systemSounds?.newOrder);
+      
+      // Set interval to play every 30 seconds until cleared
+      interval = window.setInterval(() => {
+        audioService.play(systemSettings?.systemSounds?.newOrder);
+      }, 30000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [pendingActions.length, audioUnlocked, isMuted, systemSettings?.systemSounds?.newOrder]);
 
   useEffect(() => {
     if (audioUnlocked && !isMuted && systemSettings?.systemSounds?.login) {
@@ -104,7 +139,6 @@ const Dashboard: React.FC = () => {
     let watchId: number | null = null;
     if (currentUser?.role === Role.Rider && currentUser.riderStatus === 'Available') {
       if ("geolocation" in navigator) {
-        // High-precision background watcher with persistence settings
         watchId = navigator.geolocation.watchPosition(
           async (position) => {
             const { latitude, longitude } = position.coords;
@@ -119,7 +153,7 @@ const Dashboard: React.FC = () => {
           { 
             enableHighAccuracy: true, 
             maximumAge: 0, 
-            timeout: 10000 // Prevents the browser from timing out the background process
+            timeout: 10000 
           }
         );
       }
@@ -253,6 +287,32 @@ const Dashboard: React.FC = () => {
   return (
     <LocationGuard>
       <div className="flex flex-col min-h-[calc(100vh-180px)]">
+        {/* Continuous Notification Bar */}
+        {pendingActions.length > 0 && (
+          <div className="mb-6 animate-in slide-in-from-top-4 duration-500">
+            <div className="bg-gradient-to-r from-amber-600 to-rose-600 p-4 rounded-2xl shadow-xl shadow-rose-500/20 flex flex-col md:flex-row items-center justify-between gap-4 border border-white/20">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center animate-pulse">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                </div>
+                <div>
+                  <h4 className="text-white font-black text-[11px] uppercase tracking-widest">Immediate Attention Required</h4>
+                  <p className="text-white/80 text-[10px] font-bold uppercase">{pendingActions.length} Pending Actions in Logistics Queue</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setActiveTab('deliveries');
+                  window.scrollTo({ top: 400, behavior: 'smooth' });
+                }}
+                className="w-full md:w-auto px-6 py-2.5 bg-white text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-slate-50 transition-all active:scale-95"
+              >
+                Resolve Now
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 px-1">
           <div>
             <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight font-outfit uppercase">
