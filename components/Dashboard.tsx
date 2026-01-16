@@ -22,6 +22,15 @@ const Dashboard: React.FC = () => {
   const [isMuted, setIsMuted] = useState(audioService.isMuted());
   const prevDeliveriesCount = useRef(deliveries.length);
 
+  // Auto-enable audio on login/dashboard mount
+  useEffect(() => {
+    if (!audioUnlocked) {
+      audioService.enable();
+      setAudioUnlocked(true);
+      setIsMuted(false);
+    }
+  }, [audioUnlocked]);
+
   useEffect(() => {
     if (audioUnlocked && !isMuted && systemSettings?.systemSounds?.login) {
       audioService.play(systemSettings.systemSounds.login);
@@ -34,12 +43,6 @@ const Dashboard: React.FC = () => {
     }
     prevDeliveriesCount.current = deliveries.length;
   }, [deliveries.length, systemSettings?.systemSounds?.newOrder, audioUnlocked, isMuted]);
-
-  const enableAudio = () => {
-    audioService.enable();
-    setAudioUnlocked(true);
-    setIsMuted(false);
-  };
 
   const toggleMute = () => {
     const newMuteState = !isMuted;
@@ -101,6 +104,7 @@ const Dashboard: React.FC = () => {
     let watchId: number | null = null;
     if (currentUser?.role === Role.Rider && currentUser.riderStatus === 'Available') {
       if ("geolocation" in navigator) {
+        // High-precision background watcher with persistence settings
         watchId = navigator.geolocation.watchPosition(
           async (position) => {
             const { latitude, longitude } = position.coords;
@@ -111,11 +115,11 @@ const Dashboard: React.FC = () => {
               locationStatus: 'Active'
             });
           },
-          (err) => console.error("Watcher Error:", err),
+          (err) => console.error("Persistent Watcher Error:", err),
           { 
             enableHighAccuracy: true, 
             maximumAge: 0, 
-            timeout: 5000 
+            timeout: 10000 // Prevents the browser from timing out the background process
           }
         );
       }
@@ -176,36 +180,26 @@ const Dashboard: React.FC = () => {
       case 'deliveries':
         return (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-             {!audioUnlocked ? (
-               <div className="bg-indigo-600 text-white p-4 rounded-2xl flex items-center justify-between shadow-lg shadow-indigo-600/20">
-                  <div className="flex items-center gap-3">
-                    <svg className="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-                    <p className="text-xs font-bold uppercase tracking-widest">Enable system audio alerts?</p>
-                  </div>
-                  <button onClick={enableAudio} className="bg-white text-indigo-600 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-colors">Enable</button>
-               </div>
-             ) : (
-               <div className="flex justify-end">
-                  <button 
-                    onClick={toggleMute}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest transition-all ${
-                      isMuted ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-                    }`}
-                  >
-                    {isMuted ? (
-                      <>
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
-                        Muted
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-3.5 h-3.5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
-                        Audio On
-                      </>
-                    )}
-                  </button>
-               </div>
-             )}
+             <div className="flex justify-end">
+                <button 
+                  onClick={toggleMute}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest transition-all ${
+                    isMuted ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                  }`}
+                >
+                  {isMuted ? (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
+                      Muted
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+                      Audio On
+                    </>
+                  )}
+                </button>
+             </div>
              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                 <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4 transition-colors">
                     <div className="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl"><TruckIcon className="w-5 h-5" /></div>
@@ -259,7 +253,7 @@ const Dashboard: React.FC = () => {
   return (
     <LocationGuard>
       <div className="flex flex-col min-h-[calc(100vh-180px)]">
-        <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 px-1" onClick={!audioUnlocked ? enableAudio : undefined}>
+        <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 px-1">
           <div>
             <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight font-outfit uppercase">
               {availableTabs.find(t => t.id === activeTab)?.label || 'Dashboard'}

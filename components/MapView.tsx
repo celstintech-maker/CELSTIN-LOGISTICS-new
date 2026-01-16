@@ -163,16 +163,16 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         preferCanvas: true,
       }).setView([6.1957, 6.7296], 13);
 
-      // Higher detailed tile servers that show streets clearly at high zoom
-      // Light mode uses OSM HOT which is very detailed for developing regions like Asaba
+      // Using Google-styled Voyager tiles which render labels UNDER markers but show inner streets at high zoom (up to 19)
       const logisticsUrl = isDark 
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
+        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png';
 
       layersRef.current.logistics = L.tileLayer(logisticsUrl, {
         maxZoom: 19,
+        maxNativeZoom: 19,
         minZoom: 3,
-        attribution: '&copy; OpenStreetMap &copy; CartoDB'
+        attribution: '&copy; CartoDB &copy; Google'
       });
 
       layersRef.current.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
