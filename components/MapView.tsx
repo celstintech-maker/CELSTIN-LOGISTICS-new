@@ -163,18 +163,20 @@ const MapView: React.FC<MapViewProps> = ({ targetOrder }) => {
         preferCanvas: true,
       }).setView([6.1957, 6.7296], 13);
 
-      // CartoDB styles that mirror Google Maps palette more closely than standard OSM
+      // Higher detailed tile servers that show streets clearly at high zoom
+      // Light mode uses OSM HOT which is very detailed for developing regions like Asaba
       const logisticsUrl = isDark 
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+        : 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
 
       layersRef.current.logistics = L.tileLayer(logisticsUrl, {
-        maxZoom: 20,
-        attribution: '&copy; CartoDB &copy; Google'
+        maxZoom: 19,
+        minZoom: 3,
+        attribution: '&copy; OpenStreetMap &copy; CartoDB'
       });
 
       layersRef.current.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19,
+        maxZoom: 18,
         attribution: 'Esri'
       });
 
